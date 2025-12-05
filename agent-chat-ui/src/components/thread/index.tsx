@@ -398,19 +398,18 @@ export function Thread() {
               )}
               contentClassName="pt-8 pb-16 max-w-3xl mx-auto flex flex-col gap-4 w-full"
               content={
-                <>
-                  {messages
+                <>                  {messages
                     .filter((m) => !m.id?.startsWith(DO_NOT_RENDER_ID_PREFIX))
                     .map((message, index) =>
                       message.type === "human" ? (
                         <HumanMessage
-                          key={message.id || `${message.type}-${index}`}
+                          key={`${message.id}-${index}-${message.type}` || `human-${index}`}
                           message={message}
                           isLoading={isLoading}
                         />
                       ) : (
                         <AssistantMessage
-                          key={message.id || `${message.type}-${index}`}
+                          key={`${message.id}-${index}-${message.type}` || `assistant-${index}`}
                           message={message}
                           isLoading={isLoading}
                           handleRegenerate={handleRegenerate}

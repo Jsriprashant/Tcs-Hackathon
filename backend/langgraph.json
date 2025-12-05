@@ -1,0 +1,26 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": [
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langchain-core>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langchain-text-splitters>=0.3.0",
+    "langgraph>=0.2.0",
+    "chromadb>=0.4.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "structlog>=24.0.0",
+    "."
+  ],
+  "graphs": {
+    "supervisor": "./src/supervisor/graph.py:graph",
+    "finance_agent": "./src/finance_agent/graph.py:graph",
+    "legal_agent": "./src/legal_agent/graph.py:graph",
+    "hr_agent": "./src/hr_agent/graph.py:graph",
+    "analyst_agent": "./src/analyst_agent/graph.py:graph",
+    "rag_agent": "./src/rag_agent/graph.py:graph"
+  },
+  "env": "./.env",
+  "python_version": "3.11"
+}

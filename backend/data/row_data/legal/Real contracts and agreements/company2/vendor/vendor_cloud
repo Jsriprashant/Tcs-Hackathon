@@ -1,0 +1,20 @@
+# BBD SOFTWARE COM LTD – CLOUD INFRASTRUCTURE AGREEMENT
+**Execution Date:** 12 March 2024  
+**Parties:** BBD Software Com Ltd (“Customer”) & SkyCloud India Pvt Ltd (“Vendor”)
+
+## Term
+Initial 36 months; auto-renews for 12-month periods unless terminated with 15 days’ notice.
+
+## Termination
+Vendor may terminate for convenience with 15 days’ written notice. Customer must provide 90 days’ notice and pay 75% of remaining contract value as exit fee.
+
+## Indemnity
+Vendor indemnifies only for gross negligence; cap at ₹50 lakhs. No indemnity for data breaches, IP infringement, or third-party claims arising from AI models hosted on the platform.
+
+## SLA & Credits
+99.9% uptime. Service credits capped at 5% of monthly fee. No liability for indirect or consequential damages (including lost revenue from customer churn).
+
+**Discrepancy Flags for LLM:**
+- 15-day vendor termination vs 90-day customer + huge exit penalty → supplier leverage nightmare
+- No IP / data-breach indemnity (SaaS killer in M&A)
+- Consequential damages exclusion + tiny SLA cap

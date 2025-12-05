@@ -1,0 +1,125 @@
+{
+  "sample_inputs": {
+    "simple_greeting": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello! How are you today?"
+        }
+      ],
+      "metadata": {},
+      "is_last_step": false
+    },
+    "tool_request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "What time is it right now?"
+        }
+      ],
+      "metadata": {},
+      "is_last_step": false
+    },
+    "calculation": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "Can you calculate 15 * 7 + 23 for me?"
+        }
+      ],
+      "metadata": {},
+      "is_last_step": false
+    },
+    "multi_turn_conversation": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "I need help with a math problem."
+        },
+        {
+          "role": "assistant",
+          "content": "Of course! I'd be happy to help you with a math problem. What would you like me to calculate?"
+        },
+        {
+          "role": "user",
+          "content": "What is 144 divided by 12?"
+        }
+      ],
+      "metadata": {},
+      "is_last_step": false
+    },
+    "echo_test": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "Please echo back the message: Testing 1 2 3"
+        }
+      ],
+      "metadata": {},
+      "is_last_step": false
+    }
+  },
+  "supervisor_routing": {
+    "route_to_example": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "Please use the example agent to help me."
+        }
+      ],
+      "expected_agent": "example_agent"
+    },
+    "ambiguous_request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "I need some general help."
+        }
+      ],
+      "expected_agent": "example_agent"
+    }
+  },
+  "error_cases": {
+    "invalid_calculation": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "Calculate: import os; os.system('ls')"
+        }
+      ],
+      "expected_behavior": "error_handling"
+    },
+    "empty_message": {
+      "messages": [
+        {
+          "role": "user",
+          "content": ""
+        }
+      ],
+      "expected_behavior": "graceful_handling"
+    }
+  },
+  "config_templates": {
+    "default_thread": {
+      "configurable": {
+        "thread_id": "test-thread-001"
+      }
+    },
+    "with_user_id": {
+      "configurable": {
+        "thread_id": "test-thread-002",
+        "user_id": "test-user-001"
+      }
+    },
+    "with_metadata": {
+      "configurable": {
+        "thread_id": "test-thread-003",
+        "user_id": "test-user-001"
+      },
+      "metadata": {
+        "source": "smoke_test",
+        "version": "1.0"
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+# Tool-specific configuration
+# This file can be loaded by tools that need additional configuration
+
+tools:
+  # Example tool configuration
+  example_tools:
+    enabled: true
+    settings:
+      max_retries: 3
+      timeout: 30
+
+  # Add your tool configurations here
+  # my_custom_tool:
+  #   enabled: true
+  #   api_key: "${MY_TOOL_API_KEY}"
+  #   base_url: "https://api.example.com"
+  #   settings:
+  #     rate_limit: 100
+  #     cache_ttl: 300
+
+# Global tool settings
+defaults:
+  timeout: 30
+  max_retries: 3
+  retry_delay: 1.0
+  
+# Feature flags
+features:
+  enable_caching: false
+  enable_metrics: false
+  enable_tracing: false
