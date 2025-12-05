@@ -14,11 +14,16 @@ from datetime import datetime
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+try:
+    from langchain_chroma import Chroma
+except ImportError:
+    from langchain_community.vectorstores import Chroma
 
 from src.config.llm_config import get_embedding_model
 from src.config.settings import get_settings
 from src.common.logging_config import get_logger
+from src.rag_agent.metadata_normalizer import normalize_metadata, normalize_doc_type, normalize_category
+from src.rag_agent.base import DocumentType, DocumentCategory
 
 logger = get_logger(__name__)
 
@@ -101,45 +106,86 @@ def read_csv_file(filepath: Path) -> list[Document]:
             if not rows:
                 return documents
             
-            # Determine document type from filename
-            doc_type = "financial_data"
+            # Determine document type from filename - use canonical enum values
+            doc_type = DocumentType.FINANCIAL_STATEMENT.value  # default
+            category = DocumentCategory.FINANCIAL.value
+            is_financial = True
+            
             if "balance" in filename.lower():
-                doc_type = "balance_sheet"
+                doc_type = DocumentType.BALANCE_SHEET.value
             elif "income" in filename.lower():
-                doc_type = "income_statement"
+                doc_type = DocumentType.INCOME_STATEMENT.value
             elif "cashflow" in filename.lower() or "cash_flow" in filename.lower():
-                doc_type = "cash_flow_statement"
+                doc_type = DocumentType.CASH_FLOW.value
             elif "employee" in filename.lower():
-                doc_type = "employee_data"
+                doc_type = DocumentType.EMPLOYEE_RECORD.value
+                category = DocumentCategory.HR.value
+                is_financial = False
             
-            # Create a summary document
             headers = list(rows[0].keys()) if rows else []
-            summary_content = f"# {filename}\n\n"
-            summary_content += f"**Company:** {company_id}\n"
-            summary_content += f"**Document Type:** {doc_type}\n"
-            summary_content += f"**Columns:** {', '.join(headers)}\n"
-            summary_content += f"**Total Records:** {len(rows)}\n\n"
             
-            # Add sample data
-            summary_content += "## Data Summary\n\n"
-            for row in rows[:20]:  # First 20 rows as summary
-                row_text = " | ".join([f"{k}: {v}" for k, v in row.items() if v])
-                summary_content += f"- {row_text}\n"
+            # For FINANCIAL documents: Create COMPLETE data document with ALL rows
+            if is_financial:
+                # Create comprehensive document with FULL data
+                full_content = f"# {filename} - Complete Financial Data\n\n"
+                full_content += f"**Company:** {company_id}\n"
+                full_content += f"**Document Type:** {doc_type}\n"
+                full_content += f"**Columns:** {', '.join(headers)}\n"
+                full_content += f"**Total Records:** {len(rows)}\n\n"
+                full_content += "## Complete Financial Data\n\n"
+                
+                # Add header row as table
+                full_content += "| " + " | ".join(headers) + " |\n"
+                full_content += "| " + " | ".join(["---"] * len(headers)) + " |\n"
+                
+                # Add ALL data rows - this is the key fix!
+                for row in rows:
+                    row_values = [str(row.get(h, "")) for h in headers]
+                    full_content += "| " + " | ".join(row_values) + " |\n"
+                
+                documents.append(Document(
+                    page_content=full_content,
+                    metadata={
+                        "source": str(filepath),
+                        "filename": filename,
+                        "company_id": company_id,
+                        "doc_type": doc_type,
+                        "category": category,
+                        "record_count": len(rows),
+                        "data_complete": True,
+                    }
+                ))
+                
+                # Also create individual row chunks for granular search
+                for i, row in enumerate(rows):
+                    row_label = row.get(headers[0], f"Row {i+1}") if headers else f"Row {i+1}"
+                    
+                    row_content = f"# {filename} - {row_label}\n\n"
+                    row_content += f"**Company:** {company_id}\n"
+                    row_content += f"**Document Type:** {doc_type}\n"
+                    row_content += f"**Financial Metric:** {row_label}\n\n"
+                    row_content += "## Values\n\n"
+                    
+                    for header in headers:
+                        value = row.get(header, "")
+                        if value and value != "--":
+                            row_content += f"- **{header}:** {value}\n"
+                    
+                    documents.append(Document(
+                        page_content=row_content,
+                        metadata={
+                            "source": str(filepath),
+                            "filename": filename,
+                            "company_id": company_id,
+                            "doc_type": doc_type,
+                            "category": category,
+                            "row_index": i,
+                            "row_label": row_label,
+                        }
+                    ))
             
-            documents.append(Document(
-                page_content=summary_content,
-                metadata={
-                    "source": str(filepath),
-                    "filename": filename,
-                    "company_id": company_id,
-                    "doc_type": doc_type,
-                    "category": "financial" if doc_type != "employee_data" else "hr",
-                    "record_count": len(rows),
-                }
-            ))
-            
-            # For employee data, create individual employee records
-            if doc_type == "employee_data":
+            # For EMPLOYEE data: Create individual employee records
+            elif doc_type == DocumentType.EMPLOYEE_RECORD.value:
                 for i, row in enumerate(rows):
                     emp_content = f"Employee Record: {row.get('Employee_Name', 'Unknown')}\n"
                     for k, v in row.items():
@@ -152,8 +198,8 @@ def read_csv_file(filepath: Path) -> list[Document]:
                             "source": str(filepath),
                             "filename": filename,
                             "company_id": row.get('Company', company_id),
-                            "doc_type": "employee_record",
-                            "category": "hr",
+                            "doc_type": DocumentType.EMPLOYEE_RECORD.value,
+                            "category": DocumentCategory.HR.value,
                             "employee_id": row.get('EmpID', str(i)),
                             "department": row.get('Department', 'Unknown'),
                             "position": row.get('Position', 'Unknown'),
@@ -180,31 +226,31 @@ def read_markdown_file(filepath: Path) -> list[Document]:
         if content.startswith('<!--'):
             content = content.split('-->', 1)[-1].strip()
         
-        # Determine document type
-        doc_type = "policy_document"
-        category = "hr"
+        # Determine document type - use canonical enum values
+        doc_type = DocumentType.POLICY_DOCUMENT.value
+        category = DocumentCategory.HR.value
         
         filename_lower = filename.lower()
         if "handbook" in filename_lower or "employee" in filename_lower:
-            doc_type = "employee_handbook"
+            doc_type = DocumentType.EMPLOYEE_HANDBOOK.value
         elif "license" in filename_lower:
-            doc_type = "license_agreement"
-            category = "legal"
+            doc_type = DocumentType.LICENSE_AGREEMENT.value
+            category = DocumentCategory.LEGAL.value
         elif "partnership" in filename_lower:
-            doc_type = "partnership_agreement"
-            category = "legal"
+            doc_type = DocumentType.PARTNERSHIP_AGREEMENT.value
+            category = DocumentCategory.LEGAL.value
         elif "contract" in filename_lower or "agreement" in filename_lower:
-            doc_type = "contract"
-            category = "legal"
+            doc_type = DocumentType.CONTRACT.value
+            category = DocumentCategory.LEGAL.value
         elif "mnda" in filename_lower or "nda" in filename_lower:
-            doc_type = "nda"
-            category = "legal"
+            doc_type = DocumentType.NDA.value
+            category = DocumentCategory.LEGAL.value
         elif "environment" in filename_lower:
-            doc_type = "environmental_policy"
-            category = "legal"
+            doc_type = DocumentType.ENVIRONMENTAL_POLICY.value
+            category = DocumentCategory.LEGAL.value
         elif "engagement" in filename_lower:
-            doc_type = "engagement_agreement"
-            category = "legal"
+            doc_type = DocumentType.CONTRACT.value  # Map engagement to contract
+            category = DocumentCategory.LEGAL.value
         
         documents.append(Document(
             page_content=content,
@@ -237,21 +283,21 @@ def read_text_file(filepath: Path) -> list[Document]:
         if content.startswith('//'):
             content = content.split('\n', 1)[-1].strip()
         
-        # Determine category and type based on parent folders
+        # Determine category and type based on parent folders - use canonical enum values
         parent_path = str(filepath.parent).lower()
-        category = "legal"
-        doc_type = "legal_document"
+        category = DocumentCategory.LEGAL.value
+        doc_type = DocumentType.UNKNOWN.value
         
         if "litigation" in parent_path:
-            doc_type = "litigation"
+            doc_type = DocumentType.LITIGATION.value
         elif "compliance" in parent_path:
-            doc_type = "compliance"
+            doc_type = DocumentType.COMPLIANCE.value
         elif "contract" in parent_path:
-            doc_type = "contract"
+            doc_type = DocumentType.CONTRACT.value
         elif "ip" in parent_path or "patent" in parent_path:
-            doc_type = "intellectual_property"
+            doc_type = DocumentType.IP_DOCUMENT.value
         elif "court" in parent_path or "judgment" in parent_path:
-            doc_type = "court_judgment"
+            doc_type = DocumentType.COURT_JUDGMENT.value
         
         documents.append(Document(
             page_content=content,
@@ -268,6 +314,118 @@ def read_text_file(filepath: Path) -> list[Document]:
         logger.error(f"Error reading TXT {filepath}: {e}")
     
     return documents
+
+
+def read_pdf_file(filepath: Path) -> list[Document]:
+    """
+    Read PDF file and convert to documents.
+    
+    Handles:
+    - Native PDFs (text extraction via pypdf)
+    - Scanned PDFs (OCR via pytesseract as fallback)
+    - Multi-page documents
+    
+    Args:
+        filepath: Path to PDF file
+        
+    Returns:
+        List of Document objects with metadata
+    """
+    from pypdf import PdfReader
+    
+    documents = []
+    filename = filepath.name
+    
+    try:
+        # Identify company from filepath
+        company_id = identify_company(str(filepath))
+        
+        # Determine category based on parent folders - use canonical enum values
+        parent_path = str(filepath.parent).lower()
+        category = DocumentCategory.LEGAL.value
+        doc_type = DocumentType.UNKNOWN.value
+        
+        if "litigation" in parent_path:
+            doc_type = DocumentType.LITIGATION.value
+        elif "compliance" in parent_path:
+            doc_type = DocumentType.COMPLIANCE.value
+        elif "contract" in parent_path:
+            doc_type = DocumentType.CONTRACT.value
+        elif "ip" in parent_path or "patent" in parent_path:
+            doc_type = DocumentType.IP_DOCUMENT.value
+        elif "court" in parent_path or "judgment" in parent_path:
+            doc_type = DocumentType.COURT_JUDGMENT.value
+        
+        # Try native PDF text extraction first
+        reader = PdfReader(filepath)
+        text_content = []
+        
+        for page_num, page in enumerate(reader.pages):
+            page_text = page.extract_text() or ""
+            if page_text.strip():
+                text_content.append(f"[Page {page_num + 1}]\n{page_text}")
+        
+        full_text = "\n\n".join(text_content)
+        
+        # If no text extracted, attempt OCR
+        if not full_text.strip():
+            logger.info(f"No text in PDF, attempting OCR: {filename}")
+            full_text = _extract_text_via_ocr(filepath)
+        
+        if full_text.strip():
+            documents.append(Document(
+                page_content=full_text,
+                metadata={
+                    "source": str(filepath),
+                    "filename": filename,
+                    "company_id": company_id,
+                    "doc_type": doc_type,
+                    "category": category,
+                    "page_count": len(reader.pages),
+                }
+            ))
+            logger.info(f"Loaded PDF: {filename} ({len(reader.pages)} pages, {len(full_text)} chars)")
+        else:
+            logger.warning(f"No text extracted from PDF: {filename}")
+            
+    except Exception as e:
+        logger.error(f"Error reading PDF {filepath}: {e}")
+    
+    return documents
+
+
+def _extract_text_via_ocr(filepath: Path) -> str:
+    """
+    Extract text from scanned PDF using OCR.
+    
+    Args:
+        filepath: Path to PDF file
+        
+    Returns:
+        Extracted text string
+    """
+    try:
+        from pdf2image import convert_from_path
+        import pytesseract
+        
+        # Convert PDF pages to images
+        images = convert_from_path(filepath, dpi=200)
+        
+        text_parts = []
+        for i, image in enumerate(images):
+            # Run OCR on each page
+            page_text = pytesseract.image_to_string(image)
+            if page_text.strip():
+                text_parts.append(f"[Page {i + 1}]\n{page_text}")
+        
+        return "\n\n".join(text_parts)
+        
+    except ImportError as e:
+        logger.warning(f"OCR dependencies not available: {e}")
+        return ""
+    except Exception as e:
+        logger.error(f"OCR failed for {filepath}: {e}")
+        return ""
 
 
 def scan_directory_for_documents(base_path: Path) -> list[Document]:
@@ -289,7 +447,9 @@ def scan_directory_for_documents(base_path: Path) -> list[Document]:
                 elif file_lower.endswith('.txt'):
                     docs = read_text_file(filepath)
                     all_documents.extend(docs)
-                # Skip PDFs for now (would need pypdf or similar)
+                elif file_lower.endswith('.pdf'):
+                    docs = read_pdf_file(filepath)
+                    all_documents.extend(docs)
                 
             except Exception as e:
                 logger.error(f"Error processing {filepath}: {e}")
