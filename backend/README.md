@@ -342,3 +342,72 @@ TCS GenAI Hackathon Team
 
 - LangChain and LangGraph teams for the excellent frameworks
 - TCS GenAI Lab for API access and support
+
+
+### not useful
+let me tell you how the legal agent will work
+so this agent will have a md file, which has teh common legal problems faced by company like tcs, and which file to look for to find that problem.
+the sample files are present in legal folder you can check them
+Real contract and agreement folder as the dummy data for the merger company for testing.
+all these document will be loaded into croma db in chunks and rag agent will fetch the relevant chunks.
+now legal agent will follow the md file and then it finds out if thar problem exist in the dummy company data, if yes then it will flag it.
+
+now if some company's data is not present then ask the user for the document and if user does not provide it then make a web search if that document is a public document, if no then flag it as it is a problem.
+
+now after the legal agent finishes the md then it should compare the company document with the relevant chunks of data and find out more descrepancies which could hamper the future of the company which is merging the other company.
+
+now the result of this legal agent will be based on certaon parameters, present in the knlodge markdown file, the parametrs are IP inrigment, ip descrepency, pending cases which can hamper company which is merging other company, descrepancy in contract duration maybe the contract ends just after merging and other parameters which can hamper the company.
+
+then this result will be converted to json or any other structure which is feaseable, scalable
+
+perform a root cause analysis and tell me how to implement this, i dont want any fallbacks and workarounds.
+understand the codes throughly then create a markdown files in the location backend\docs\legal_agent{markdownfiles}.md
+the implementaiton should be scalable, feaseable and efficient
+without fallabckas and workarounds
+
+if you have any query ask me before proceding.
+dont worry about rag agent, it is being taken care of by another person.
+
+Clarifying Questions
+Before I create the comprehensive implementation plan for the Legal Agent, I need to understand a few things:
+
+Knowledge Markdown File Location: You mentioned the legal agent will have an MD file with common legal problems. Should this knowledge base be located at:
+
+backend/src/legal_agent/knowledge/ or
+backend/data/legal_knowledge/ or
+somewhere else?
+Web Search Integration: For cases where documents are not present and user doesn't provide them, you mentioned web search for public documents. Which service should I use for web search?
+
+Should I integrate with a search API (Tavily, SerpAPI, DuckDuckGo)?
+Or should I assume an MCP server will provide this capability?
+User Interaction for Missing Documents: When the agent needs to ask the user for documents:
+
+Should this be done via the chat interface (interrupt the graph and wait for user upload)?
+Should it use the human-in-the-loop pattern from LangGraph?
+Output Structure: You mentioned the result should be converted to JSON or any scalable structure. Should the output:
+
+Be a standalone report that gets saved to a file?
+Be stored in the LangGraph state for downstream agents?
+Be both (stored in state AND exported to a structured file)?
+Company Data Mapping: The sample data has company1 and company2 folders. Should I:
+
+Create a mapping to identify which company data belongs to which company ID (BBD, Supernova, etc.)?
+Are company1 = Supernova and company2 = BBD based on the content I saw?
+Parallel Execution: Should the legal checklist items be evaluated:
+
+Sequentially (one after another)?
+In parallel (for faster execution)?
+In logical groups (e.g., all IP checks together, all contract checks together)?
+Integration with Supervisor: The supervisor currently calls legal_agent as a sub-agent. Should the new implementation:
+
+Keep the same interface (be called the same way)?
+Change the calling pattern to support the new structured workflow?
+Please clarify these points so I can create a precise, production-ready implementation plan without fallbacks or workarounds.
+
+it will be present in backend\src\legal_agent\legal_knowledge
+integrate a free search api
+use human in the loop, in the front end i have a upload capability but it should this is for later development after the agent is ready, until then just mention the missing docs
+store it in langgraph state, for downstream agents
+if it helps in development then you can do it
+preferablly in logical groups
+we will update the supervisor but it should not break other agents, it should be a sub agent only but we can update it
