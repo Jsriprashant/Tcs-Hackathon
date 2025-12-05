@@ -17,6 +17,15 @@ from src.supervisor.state import SupervisorState
 from src.supervisor.prompts import SUPERVISOR_SYSTEM_PROMPT, ROUTING_PROMPT
 from src.common.logging_config import get_logger, log_agent_action
 from src.common.guardrails import PIIFilter, InputValidator
+from src.common.state import CompanyInfo
+
+# Import intent classifier (Phase 1)
+from src.common.intent_classifier import (
+    classify_intent,
+    get_last_human_message,
+    IntentType,
+    IntentClassificationResult,
+)
 
 # Import sub-agents
 from src.finance_agent.graph import finance_agent
@@ -35,49 +44,6 @@ AGENTS = {
     "analyst_agent": analyst_agent,
     "rag_agent": rag_agent,
 }
-
-# Greeting patterns for smart detection
-GREETING_PATTERNS = [
-    "hi", "hello", "hey", "good morning", "good afternoon", "good evening",
-    "howdy", "greetings", "what's up", "whats up", "sup", "yo",
-    "hi there", "hello there", "hey there"
-]
-
-# Help/info request patterns
-HELP_PATTERNS = [
-    "help", "what can you do", "what do you do", "how can you help",
-    "what are your capabilities", "what services", "tell me about yourself",
-    "who are you", "what is this", "how does this work"
-]
-
-
-def is_greeting_or_simple_query(query: str) -> tuple[bool, str]:
-    """
-    Detect if the query is a simple greeting or help request.
-    
-    Returns:
-        Tuple of (is_simple, response_type) where response_type is 'greeting', 'help', or 'none'
-    """
-    if not query:
-        return False, "none"
-    
-    query_lower = query.lower().strip()
-    
-    # Check for greetings
-    for pattern in GREETING_PATTERNS:
-        if query_lower == pattern or query_lower.startswith(pattern + " ") or query_lower.startswith(pattern + "!"):
-            return True, "greeting"
-    
-    # Check for help requests
-    for pattern in HELP_PATTERNS:
-        if pattern in query_lower:
-            return True, "help"
-    
-    # Check for very short queries that are likely greetings
-    if len(query_lower.split()) <= 2 and any(g in query_lower for g in ["hi", "hello", "hey"]):
-        return True, "greeting"
-    
-    return False, "none"
 
 
 def get_greeting_response() -> str:
@@ -142,6 +108,284 @@ I'm an AI-powered platform designed to streamline M&A due diligence processes. H
 What would you like to analyze?"""
 
 
+# =============================================================================
+# INTENT CLASSIFICATION NODE (Phase 3)
+# This node runs FIRST to classify user intent and gate chain activation
+# =============================================================================
+
+def intent_classifier_node(state: SupervisorState) -> dict:
+    """
+    Classifies user intent and extracts company names.
+    
+    This node runs first, before any routing decision. It determines whether
+    the full agent chain should be activated based on:
+    1. Intent type (must be MA_DUE_DILIGENCE)
+    2. Company names being present (acquirer and/or target)
+    
+    Args:
+        state: Current supervisor state
+        
+    Returns:
+        Dict with intent classification results and optional company info
+    """
+    log_agent_action(logger, "intent_classifier", "classifying_intent", {})
+    
+    # Get last user message
+    last_message = get_last_human_message(state.messages)
+    
+    if not last_message:
+        logger.warning("No human message found for intent classification")
+        return {
+            "intent_classified": True,
+            "intent_type": "UNKNOWN",
+            "intent_confidence": 0.0,
+            "chain_activated": False,
+        }
+    
+    # Classify intent using the intent classifier module
+    result: IntentClassificationResult = classify_intent(last_message)
+    
+    log_agent_action(logger, "intent_classifier", "classification_result", {
+        "intent": result.intent.value,
+        "confidence": result.confidence,
+        "acquirer": result.acquirer_company,
+        "target": result.target_company,
+        "should_activate_chain": result.should_activate_chain,
+    })
+    
+    # Build state updates
+    updates = {
+        "intent_classified": True,
+        "intent_type": result.intent.value,
+        "intent_confidence": result.confidence,
+        "chain_activated": result.should_activate_chain,
+    }
+    
+    # Extract and set companies if M&A due diligence with company names
+    if result.intent == IntentType.MA_DUE_DILIGENCE and result.should_activate_chain:
+        if result.acquirer_company:
+            updates["acquirer"] = CompanyInfo(
+                company_id=result.acquirer_company.lower().replace(" ", "_"),
+                company_name=result.acquirer_company,
+                industry="Unknown"  # Will be populated by RAG agent
+            )
+            logger.info(f"Set acquirer company: {result.acquirer_company}")
+        
+        if result.target_company:
+            updates["target"] = CompanyInfo(
+                company_id=result.target_company.lower().replace(" ", "_"),
+                company_name=result.target_company,
+                industry="Unknown"  # Will be populated by RAG agent
+            )
+            logger.info(f"Set target company: {result.target_company}")
+    
+    logger.info(
+        f"Intent classification complete: {result.intent.value}, "
+        f"chain_activated={result.should_activate_chain}"
+    )
+    
+    return updates
+
+
+def route_after_intent(state: SupervisorState) -> str:
+    """
+    Route based on classified intent.
+    
+    This function is called after intent_classifier_node to determine
+    the next node in the graph based on the classified intent.
+    
+    Only routes to supervisor (and agent chain) for MA_DUE_DILIGENCE with companies.
+    All other intents route to specialized handlers that respond directly.
+    
+    Args:
+        state: Current supervisor state with intent classification
+        
+    Returns:
+        String name of the next node to execute
+    """
+    intent = state.intent_type
+    
+    log_agent_action(logger, "intent_router", "routing_decision", {
+        "intent": intent,
+        "chain_activated": state.chain_activated,
+    })
+    
+    # MA_DUE_DILIGENCE with companies -> full agent chain via supervisor
+    if intent == "MA_DUE_DILIGENCE" and state.chain_activated:
+        logger.info("Routing to supervisor for full agent chain execution")
+        return "supervisor"
+    
+    # MA_QUESTION -> answer M&A question directly (no chain)
+    elif intent == "MA_QUESTION":
+        logger.info("Routing to ma_question_handler")
+        return "ma_question_handler"
+    
+    # GREETING -> greeting response (no chain)
+    elif intent == "GREETING":
+        logger.info("Routing to greeting_handler")
+        return "greeting_handler"
+    
+    # HELP -> help/capabilities response (no chain)
+    elif intent == "HELP":
+        logger.info("Routing to help_handler")
+        return "help_handler"
+    
+    # INFORMATIONAL or UNKNOWN -> informational response (no chain)
+    else:
+        logger.info(f"Routing to informational_handler for intent: {intent}")
+        return "informational_handler"
+
+
+# =============================================================================
+# HANDLER NODES FOR NON-CHAIN QUERIES (Phase 5)
+# These nodes handle queries that don't require the full agent chain
+# =============================================================================
+
+def greeting_handler_node(state: SupervisorState) -> dict:
+    """
+    Handle greeting queries with a friendly response.
+    
+    This node responds to simple greetings without invoking any agents.
+    Uses the pre-defined greeting response for consistency.
+    """
+    log_agent_action(logger, "greeting_handler", "handling_greeting", {})
+    
+    response_content = get_greeting_response()
+    
+    logger.info("Greeting handled successfully")
+    return {
+        "messages": [AIMessage(content=response_content)],
+        "next_agent": "FINISH",
+    }
+
+
+def help_handler_node(state: SupervisorState) -> dict:
+    """
+    Handle help/capability queries with platform information.
+    
+    This node responds to help requests without invoking any agents.
+    Uses the pre-defined help response for consistency.
+    """
+    log_agent_action(logger, "help_handler", "handling_help_request", {})
+    
+    response_content = get_help_response()
+    
+    logger.info("Help request handled successfully")
+    return {
+        "messages": [AIMessage(content=response_content)],
+        "next_agent": "FINISH",
+    }
+
+
+def ma_question_handler_node(state: SupervisorState) -> dict:
+    """
+    Handle M&A-related questions without specific company context.
+    
+    This node answers conceptual questions about M&A, due diligence,
+    synergies, etc. without invoking the full agent chain.
+    It also prompts the user to provide company names if they want
+    to perform actual due diligence.
+    """
+    log_agent_action(logger, "ma_question_handler", "handling_ma_question", {})
+    
+    llm = get_llm(temperature=0.1)
+    
+    last_message = get_last_human_message(state.messages)
+    
+    prompt = f"""You are an M&A Due Diligence expert. Answer this question about M&A concepts.
+
+Question: {last_message}
+
+Provide a clear, educational answer about the M&A concept being asked.
+
+At the end of your response, include this note:
+---
+💡 **Want to perform actual due diligence?**
+To start a comprehensive due diligence analysis, please provide:
+1. The acquiring company name
+2. The target company name  
+3. Whether this is a merger or acquisition
+
+Example: "Analyze the merger between CompanyA and CompanyB"
+"""
+    
+    try:
+        response = llm.invoke([SystemMessage(content=prompt)])
+        logger.info("M&A question handled successfully")
+        return {
+            "messages": [response],
+            "next_agent": "FINISH",
+        }
+    except Exception as e:
+        logger.error(f"Error handling M&A question: {e}")
+        return {
+            "messages": [AIMessage(content=f"I apologize, I encountered an error while processing your question. Please try again. Error: {str(e)}")],
+            "next_agent": "FINISH",
+        }
+
+
+def informational_handler_node(state: SupervisorState) -> dict:
+    """
+    Handle general informational queries not related to M&A.
+    
+    This node handles queries that are either:
+    - General information requests unrelated to M&A
+    - Queries classified as UNKNOWN
+    
+    It politely redirects users to M&A-related topics.
+    """
+    log_agent_action(logger, "informational_handler", "handling_informational_query", {})
+    
+    llm = get_llm(temperature=0.1)
+    
+    last_message = get_last_human_message(state.messages)
+    
+    prompt = f"""You are an M&A Due Diligence Assistant. The user asked a question that may not be directly related to M&A.
+
+User's Question: {last_message}
+
+If this question is related to M&A or business topics, provide helpful information.
+If this question is completely unrelated to M&A (like weather, jokes, etc.), politely acknowledge their question briefly and then redirect them to M&A topics.
+
+Always end your response by mentioning that you specialize in:
+- 📊 Financial due diligence
+- ⚖️ Legal due diligence  
+- 👥 HR due diligence
+- 📈 Strategic analysis for mergers and acquisitions
+
+And that to start an analysis, they should provide the names of the companies involved in the merger or acquisition.
+"""
+    
+    try:
+        response = llm.invoke([SystemMessage(content=prompt)])
+        logger.info("Informational query handled successfully")
+        return {
+            "messages": [response],
+            "next_agent": "FINISH",
+        }
+    except Exception as e:
+        logger.error(f"Error handling informational query: {e}")
+        return {
+            "messages": [AIMessage(content="""I'm an M&A Due Diligence Assistant. I specialize in:
+
+📊 **Financial Due Diligence** - Analyze financial statements and identify risks
+⚖️ **Legal Due Diligence** - Review contracts, litigation, and compliance
+👥 **HR Due Diligence** - Assess workforce and cultural fit
+📈 **Strategic Analysis** - Evaluate synergies and deal recommendations
+
+To start an analysis, please provide the names of the companies involved in your merger or acquisition.
+
+Example: "Analyze the acquisition of TargetCorp by AcquirerInc"
+""")],
+            "next_agent": "FINISH",
+        }
+
+
+# =============================================================================
+# END HANDLER NODES
+# =============================================================================
+
+
 def create_supervisor_context(state: SupervisorState) -> str:
     """Create context string for supervisor prompt."""
     companies_context = ""
@@ -164,7 +408,10 @@ def create_supervisor_context(state: SupervisorState) -> str:
 def supervisor_node(state: SupervisorState) -> dict:
     """
     Main supervisor node that decides which agent to invoke next.
-    Handles greetings and simple queries without invoking the full agent flow.
+    
+    Note: Greetings and simple queries are now handled by the intent classifier
+    and handler nodes before reaching this node. This node is only invoked for
+    MA_DUE_DILIGENCE intents with company names.
     """
     llm = get_llm(temperature=0.0)
     
@@ -184,20 +431,6 @@ def supervisor_node(state: SupervisorState) -> dict:
                     elif isinstance(item, dict) and item.get("type") == "text":
                         text_parts.append(item.get("text", ""))
                 content = " ".join(text_parts)
-            
-            # Check for greetings or simple queries first
-            is_simple, query_type = is_greeting_or_simple_query(content)
-            if is_simple:
-                if query_type == "greeting":
-                    return {
-                        "messages": [AIMessage(content=get_greeting_response())],
-                        "next_agent": "FINISH",
-                    }
-                elif query_type == "help":
-                    return {
-                        "messages": [AIMessage(content=get_help_response())],
-                        "next_agent": "FINISH",
-                    }
             
             # Validate the query
             is_valid, error = validator.validate_query(content)
@@ -294,7 +527,17 @@ def supervisor_node(state: SupervisorState) -> dict:
 
 
 def determine_default_routing(state: SupervisorState) -> dict:
-    """Determine default routing based on current phase."""
+    """
+    Determine default routing based on current phase and chain activation.
+    
+    If chain_activated is False, we should not invoke any agents and should
+    finish immediately. This is a safety check for edge cases.
+    """
+    
+    # Safety check: If chain is not activated, finish immediately
+    if not state.chain_activated:
+        logger.warning("Chain not activated, returning FINISH from default routing")
+        return {"next_agent": "FINISH", "reasoning": "Chain not activated - no company names provided"}
     
     if state.current_phase == "initialization":
         return {"next_agent": "rag_agent", "reasoning": "Start with document retrieval"}
@@ -454,24 +697,52 @@ def build_supervisor_graph():
     """
     Build the main supervisor graph that orchestrates all agents.
     
-    Graph Structure:
+    Graph Structure (Updated with Intent Classification):
     
-    START → supervisor → [routing decision]
-                ↓
-    ┌─────────────────────────────────────┐
-    │  finance_agent  legal_agent         │
-    │  hr_agent  analyst_agent  rag_agent │
-    │  human_review                       │
-    └─────────────────────────────────────┘
-                ↓
-            supervisor (loop back)
-                ↓
-              END
+    START → intent_classifier → [route_after_intent]
+                                       │
+                ┌──────────────────────┼──────────────────────┐
+                │                      │                      │
+                ▼                      ▼                      ▼
+         greeting_handler      ma_question_handler     supervisor
+         help_handler          informational_handler       │
+                │                      │            [route_to_agent]
+                │                      │                   │
+                ▼                      ▼         ┌─────────┴─────────┐
+               END                    END        │                   │
+                                           ┌─────┴─────┐       human_review
+                                           │  agents   │             │
+                                           └─────┬─────┘             ▼
+                                                 │                  END
+                                                 ▼
+                                            supervisor
+                                                 │
+                                                 ▼
+                                                END
+    
+    The intent_classifier node runs first to:
+    1. Classify user intent (GREETING, HELP, MA_QUESTION, MA_DUE_DILIGENCE, etc.)
+    2. Extract company names for M&A requests
+    3. Set chain_activated flag
+    
+    Only MA_DUE_DILIGENCE with company names routes to supervisor and triggers
+    the full agent chain. All other intents are handled by specialized handlers.
     """
     
     workflow = StateGraph(SupervisorState)
     
-    # Add nodes
+    # =========================================================================
+    # Add Intent Classification & Handler Nodes (Phase 5 & 6)
+    # =========================================================================
+    workflow.add_node("intent_classifier", intent_classifier_node)
+    workflow.add_node("greeting_handler", greeting_handler_node)
+    workflow.add_node("help_handler", help_handler_node)
+    workflow.add_node("ma_question_handler", ma_question_handler_node)
+    workflow.add_node("informational_handler", informational_handler_node)
+    
+    # =========================================================================
+    # Add Supervisor & Agent Nodes (existing)
+    # =========================================================================
     workflow.add_node("supervisor", supervisor_node)
     workflow.add_node("finance_agent", finance_agent_node)
     workflow.add_node("legal_agent", legal_agent_node)
@@ -480,10 +751,37 @@ def build_supervisor_graph():
     workflow.add_node("rag_agent", rag_agent_node)
     workflow.add_node("human_review", human_review_node)
     
-    # Set entry point
-    workflow.set_entry_point("supervisor")
+    # =========================================================================
+    # Set Entry Point to Intent Classifier (NEW - Phase 6)
+    # =========================================================================
+    workflow.set_entry_point("intent_classifier")
     
-    # Add conditional routing from supervisor
+    # =========================================================================
+    # Route from Intent Classifier based on Intent (NEW - Phase 6)
+    # =========================================================================
+    workflow.add_conditional_edges(
+        "intent_classifier",
+        route_after_intent,
+        {
+            "supervisor": "supervisor",
+            "greeting_handler": "greeting_handler",
+            "help_handler": "help_handler",
+            "ma_question_handler": "ma_question_handler",
+            "informational_handler": "informational_handler",
+        }
+    )
+    
+    # =========================================================================
+    # Handler Nodes go directly to END (NEW - Phase 6)
+    # =========================================================================
+    workflow.add_edge("greeting_handler", END)
+    workflow.add_edge("help_handler", END)
+    workflow.add_edge("ma_question_handler", END)
+    workflow.add_edge("informational_handler", END)
+    
+    # =========================================================================
+    # Existing Routing from Supervisor (unchanged)
+    # =========================================================================
     workflow.add_conditional_edges(
         "supervisor",
         route_to_agent,
@@ -503,7 +801,7 @@ def build_supervisor_graph():
     for agent_name in ["finance_agent", "legal_agent", "hr_agent", "analyst_agent", "rag_agent"]:
         workflow.add_edge(agent_name, "supervisor")
     
-    # Human review can go back to supervisor or end
+    # Human review goes to END
     workflow.add_edge("human_review", END)
     
     return workflow.compile()

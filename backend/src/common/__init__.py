@@ -11,6 +11,12 @@ from .errors import (
 )
 from .guardrails import PIIFilter, InputValidator, OutputSanitizer
 from .utils import format_currency, calculate_percentage_change, parse_date
+from .intent_classifier import (
+    IntentType,
+    IntentClassificationResult,
+    classify_intent,
+    get_last_human_message,
+)
 
 __all__ = [
     "BaseAgentState",
@@ -30,4 +36,9 @@ __all__ = [
     "format_currency",
     "calculate_percentage_change",
     "parse_date",
+    # Intent Classification
+    "IntentType",
+    "IntentClassificationResult",
+    "classify_intent",
+    "get_last_human_message",
 ]

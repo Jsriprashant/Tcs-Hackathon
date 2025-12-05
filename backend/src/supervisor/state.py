@@ -1,10 +1,10 @@
-# filepath: c:\Users\GenAIBLRANCUSR25.01HW2562306\Desktop\application_v1\Tcs-Hackathon\backend\src\supervisor\state.py
 """State definitions for Supervisor Agent."""
 
 from typing import Optional, Literal, Annotated
 from pydantic import BaseModel, Field
 from langgraph.graph.message import add_messages
 from src.common.state import BaseAgentState, RiskScore, AnalysisResult, CompanyInfo
+from src.common.intent_classifier import IntentType
 
 
 class SupervisorState(BaseAgentState):
@@ -17,6 +17,37 @@ class SupervisorState(BaseAgentState):
     
     # Conversation
     messages: Annotated[list, add_messages] = Field(default_factory=list)
+    
+    # ==========================================================================
+    # Intent Classification (NEW - Phase 2)
+    # These fields gate whether the agent chain should be activated
+    # ==========================================================================
+    intent_classified: bool = Field(
+        default=False, 
+        description="Whether intent classification has been performed"
+    )
+    intent_type: Optional[Literal[
+        "MA_DUE_DILIGENCE",
+        "MA_QUESTION",
+        "INFORMATIONAL",
+        "GREETING",
+        "HELP",
+        "UNKNOWN"
+    ]] = Field(
+        default=None,
+        description="Classified intent type from user query"
+    )
+    intent_confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Confidence score of intent classification"
+    )
+    chain_activated: bool = Field(
+        default=False,
+        description="Whether the full agent chain should run. Only True for MA_DUE_DILIGENCE with company names"
+    )
+    # ==========================================================================
     
     # Deal Context
     deal_id: Optional[str] = None
