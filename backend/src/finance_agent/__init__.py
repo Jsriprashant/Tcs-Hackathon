@@ -1,24 +1,22 @@
-"""Finance Agent module for financial due diligence."""
+"""Finance Agent module for TCS M&A Financial Due Diligence."""
 
 from .graph import finance_agent, graph
 from .tools import (
-    analyze_balance_sheet,
-    analyze_income_statement,
-    analyze_cash_flow,
-    analyze_financial_ratios,
-    assess_financial_risk,
-    compare_financial_performance,
+    get_financial_documents,
+    calculate_ratios,
+    calculate_tcs_score,
+    get_tcs_benchmarks,
     finance_tools,
+    get_benchmarks,
 )
 
 __all__ = [
     "finance_agent",
     "graph",
-    "analyze_balance_sheet",
-    "analyze_income_statement",
-    "analyze_cash_flow",
-    "analyze_financial_ratios",
-    "assess_financial_risk",
-    "compare_financial_performance",
+    "get_financial_documents",
+    "calculate_ratios",
+    "calculate_tcs_score",
+    "get_tcs_benchmarks",
     "finance_tools",
+    "get_benchmarks",
 ]

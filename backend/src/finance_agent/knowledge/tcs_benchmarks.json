@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "source": "TCS M&A Financial Standards",
+  
+  "benchmarks": {
+    "profitability": {
+      "gross_profit_margin": {"target": 30, "red_flag": 20, "points": 8, "higher_better": true},
+      "net_profit_margin": {"target": 22, "red_flag": 10, "points": 10, "higher_better": true},
+      "ebitda_margin": {"target": 31, "red_flag": 15, "points": 7, "higher_better": true}
+    },
+    "returns": {
+      "roe": {"target": 34, "red_flag": 15, "points": 10, "higher_better": true},
+      "roce": {"target": 24, "red_flag": 12, "points": 5, "higher_better": true}
+    },
+    "liquidity": {
+      "current_ratio": {"target": 2.0, "red_flag": 1.0, "points": 10, "higher_better": true},
+      "quick_ratio": {"target": 1.5, "red_flag": 0.8, "points": 10, "higher_better": true}
+    },
+    "leverage": {
+      "debt_to_equity": {"target": 0.25, "red_flag": 1.0, "points": 10, "higher_better": false},
+      "interest_coverage": {"target": 8, "red_flag": 2, "points": 5, "higher_better": true}
+    },
+    "efficiency": {
+      "asset_turnover": {"target": 1.6, "red_flag": 0.8, "points": 5, "higher_better": true},
+      "receivables_turnover": {"target": 8, "red_flag": 4, "points": 5, "higher_better": true},
+      "inventory_turnover": {"target": 5, "red_flag": 2, "points": 5, "higher_better": true}
+    },
+    "growth": {
+      "revenue_yoy_growth": {"target": 11, "red_flag": 5, "points": 10, "higher_better": true}
+    }
+  },
+  
+  "category_max_scores": {
+    "profitability": 25,
+    "liquidity": 20,
+    "leverage": 15,
+    "growth_returns": 25,
+    "efficiency": 15
+  },
+  
+  "deal_breakers": [
+    "negative_net_worth",
+    "negative_equity", 
+    "debt_to_equity_over_3",
+    "three_consecutive_year_losses",
+    "current_ratio_below_0.5",
+    "interest_coverage_below_1",
+    "fraud_evidence",
+    "auditor_qualifications_2_plus_years",
+    "undisclosed_liabilities"
+  ],
+  
+  "score_interpretation": {
+    "76-100": {"level": "Strong", "action": "PROCEED", "desc": "Good acquisition candidate"},
+    "51-75": {"level": "Moderate", "action": "CAUTION", "desc": "Proceed with valuation discount"},
+    "26-50": {"level": "Weak", "action": "CAUTION", "desc": "Deep forensic audit required"},
+    "0-25": {"level": "Very High Risk", "action": "REJECT", "desc": "High financial risk"}
+  }
+}
