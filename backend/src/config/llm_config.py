@@ -24,6 +24,7 @@ def get_http_client() -> httpx.Client:
         # Use custom certificate
         verify = settings.ssl_cert_path
     elif settings.verify_ssl:
+        # SSL verification enabled
         verify = True
     else:
         # Disable SSL verification (for development/testing only)
@@ -46,11 +47,13 @@ def get_llm(
         temperature: Sampling temperature (0.0 = deterministic)
         max_tokens: Maximum tokens for response
         streaming: Enable streaming responses
-      Returns:
+    
+    Returns:
         Configured ChatOpenAI instance
     """
     settings = get_settings()
-      # Debug logging
+    
+    # Debug logging
     import logging
     logging.getLogger(__name__).info(f"Using model: {model_name or settings.default_model}")
     logging.getLogger(__name__).info(f"Base URL: {settings.tcs_genai_base_url}")
@@ -62,7 +65,7 @@ def get_llm(
     return ChatOpenAI(
         model=model_name or settings.default_model,
         api_key=settings.tcs_genai_api_key,
-        base_url=f"{settings.tcs_genai_base_url}/openai/v1",
+        base_url=settings.tcs_genai_base_url,
         temperature=temperature,
         max_tokens=max_tokens,
         streaming=streaming,
@@ -86,7 +89,7 @@ def get_embedding_model() -> Embeddings:
     return OpenAIEmbeddings(
         model=settings.embedding_model,
         api_key=settings.tcs_genai_api_key,
-        base_url=f"{settings.tcs_genai_base_url}/openai/v1",
+        base_url=settings.tcs_genai_base_url,
         http_client=http_client,
     )
 
@@ -109,7 +112,7 @@ def get_reasoning_llm(temperature: float = 0.1) -> BaseChatModel:
     return ChatOpenAI(
         model=settings.reasoning_model,
         api_key=settings.tcs_genai_api_key,
-        base_url=f"{settings.tcs_genai_base_url}/openai/v1",
+        base_url=settings.tcs_genai_base_url,
         temperature=temperature,
         max_tokens=8192,  # Larger context for reasoning
         http_client=http_client,
