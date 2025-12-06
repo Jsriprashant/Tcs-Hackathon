@@ -1,0 +1,634 @@
+{
+  "version": "2.0",
+  "source": "TCS HR M&A Policy Standards",
+  "description": "Machine-readable scoring parameters for HR policy comparison during M&A due diligence - Based on TCS HR Policy Manual v2.0",
+  "acquirer": {
+    "company_name": "Tata Consultancy Services (TCS)",
+    "policy_version": "2.0",
+    "effective_date": "December 2025",
+    "core_principles": ["Equal Opportunity", "Transparency", "Fairness", "Dignity", "Compliance", "Accountability"]
+  },
+  
+  "parameters": {
+    "working_hours_compensation": {
+      "id": 1,
+      "weight": 10,
+      "description": "Working hours fairness relative to compensation",
+      "what_to_extract": ["Weekly working hours", "Overtime rules (paid/unpaid, rate)", "Break/rest policies", "Salary bands if available"],
+      "tcs_baseline": {
+        "weekly_hours": 40,
+        "standard_hours": "9 AM - 6 PM",
+        "core_hours": "10 AM - 4 PM",
+        "overtime_rate": "2x base pay",
+        "overtime_paid": true,
+        "biometric_tracking": true,
+        "five_day_week": true
+      },
+      "scoring_guide": {
+        "5": "Industry-leading standards, strong employee protection, matches/exceeds TCS",
+        "4": "Clear limits, transparent overtime, market pay - meets TCS standard",
+        "3": "Reasonable hours or compensated overtime - slightly below TCS",
+        "2": "Above-normal hours, unclear pay fairness - significantly below TCS",
+        "1": "Long hours, unclear overtime, low pay - major gaps",
+        "0": "Excessive hours, unpaid overtime, exploitative - no policy or violation"
+      },
+      "red_flags": [
+        "Expected to work beyond hours without pay",
+        "Missing overtime rules",
+        "Weekly hours > 50",
+        "No break/rest policy",
+        "No attendance tracking"
+      ]
+    },
+    
+    "leave_time_off": {
+      "id": 2,
+      "weight": 10,
+      "description": "Leave structure against legal requirements and TCS standards",
+      "what_to_extract": ["Annual leave entitlement", "Sick/maternity/paternity leave", "Public holiday policy", "Unpaid leave terms", "Special leaves"],
+      "tcs_baseline": {
+        "earned_leave": 24,
+        "casual_leave": 8,
+        "sick_leave": 12,
+        "maternity_leave_days": 180,
+        "paternity_leave_days": 14,
+        "adoption_leave_days": 180,
+        "study_leave": "available",
+        "sabbatical": "available",
+        "bereavement_leave": "available",
+        "marriage_leave": "available",
+        "public_holidays": "as per location"
+      },
+      "scoring_guide": {
+        "5": "Inclusive, generous, employee-friendly - matches/exceeds TCS",
+        "4": "Above average leave, structured - meets TCS standard",
+        "3": "Meets industry norms - slightly below TCS",
+        "2": "Limited leave, unclear paid/unpaid split - significantly below TCS",
+        "1": "Bare minimum, unclear rules - major gaps",
+        "0": "Below legal minimum, restrictive - no policy or violation"
+      },
+      "red_flags": [
+        "No maternity/paternity leave mention",
+        "Annual leave < 18 days",
+        "No sick leave policy",
+        "Maternity leave < 26 weeks (Indian legal minimum)",
+        "No leave accrual rules"
+      ]
+    },
+    
+    "compensation_transparency": {
+      "id": 3,
+      "weight": 10,
+      "description": "Fairness and transparency in pay and benefits",
+      "what_to_extract": ["Pay structure (fixed/variable)", "Bonus rules", "Medical benefits, insurance, PF", "ESOP/retirement benefits", "Pay review frequency"],
+      "tcs_baseline": {
+        "structure": "fixed + variable",
+        "review_frequency": "annual",
+        "bonus_criteria": "performance + company metrics",
+        "medical_insurance": true,
+        "life_insurance": true,
+        "retirement_benefits": "PF + Gratuity",
+        "esop": "eligible for senior roles",
+        "tax_planning": "supported",
+        "loan_schemes": "available"
+      },
+      "scoring_guide": {
+        "5": "Highly competitive, structured, equitable - matches/exceeds TCS",
+        "4": "Clear, transparent, competitive - meets TCS standard",
+        "3": "Standard structured policy - slightly below TCS",
+        "2": "Partial transparency - significantly below TCS",
+        "1": "Vague compensation structure - major gaps",
+        "0": "No transparency, unfair practices - no policy or violation"
+      },
+      "red_flags": [
+        "Discretionary bonus without criteria",
+        "No PF/ESI mention",
+        "No insurance benefits",
+        "Unclear variable pay structure",
+        "No annual review"
+      ]
+    },
+    
+    "employment_terms": {
+      "id": 4,
+      "weight": 10,
+      "description": "Contract clarity, notice periods, and probation terms",
+      "what_to_extract": ["Notice periods", "Probation rules", "Contract types (permanent/contractual)", "Remote work rules", "Appointment letter contents"],
+      "tcs_baseline": {
+        "probation_period": "6-12 months",
+        "notice_period": "30-90 days (role-dependent)",
+        "contract_type": "permanent (standard)",
+        "remote_work_policy": "formal eligibility and approval process",
+        "appointment_letter": "comprehensive with all terms",
+        "background_verification": "mandatory",
+        "confidentiality_agreement": "required"
+      },
+      "scoring_guide": {
+        "5": "Employee-first contract policies - matches/exceeds TCS",
+        "4": "Transparent terms - meets TCS standard",
+        "3": "Legally compliant - slightly below TCS",
+        "2": "Unbalanced terms - significantly below TCS",
+        "1": "High notice period, unfair clauses - major gaps",
+        "0": "Unclear contracts, unilateral rights - no policy or violation"
+      },
+      "red_flags": [
+        "One-sided termination rights",
+        "Notice period > 90 days without justification",
+        "No probation policy",
+        "Unclear contract types",
+        "No remote work policy"
+      ]
+    },
+    
+    "performance_management": {
+      "id": 5,
+      "weight": 10,
+      "description": "Performance review fairness and promotion process",
+      "what_to_extract": ["Review frequency", "Promotion criteria", "PIP process", "Feedback mechanisms", "Rating scales"],
+      "tcs_baseline": {
+        "review_frequency": "annual",
+        "methodology": "balanced scorecard",
+        "dimensions": ["business results", "customer focus", "learning", "people"],
+        "promotion_criteria": "documented and objective",
+        "pip_process": "structured with clear timelines",
+        "feedback_360": true,
+        "ratings": "5-level scale",
+        "goal_setting": "annual with mid-year review"
+      },
+      "scoring_guide": {
+        "5": "Objective, inclusive, data-driven - matches/exceeds TCS",
+        "4": "Clear, documented criteria - meets TCS standard",
+        "3": "Standard review process - slightly below TCS",
+        "2": "Limited transparency - significantly below TCS",
+        "1": "Ad-hoc reviews - major gaps",
+        "0": "No documented process - no policy or violation"
+      },
+      "red_flags": [
+        "No promotion criteria listed",
+        "No PIP process",
+        "Subjective evaluation only",
+        "No regular reviews",
+        "No goal-setting process"
+      ]
+    },
+    
+    "employee_relations_culture": {
+      "id": 6,
+      "weight": 10,
+      "description": "Company culture and grievance handling",
+      "what_to_extract": ["Code of conduct", "Grievance resolution", "Engagement initiatives", "DEI policies", "Wellbeing programs"],
+      "tcs_baseline": {
+        "code_of_conduct": "comprehensive ethical standards",
+        "grievance_process": "3-tier (informal → HR formal → appellate)",
+        "dei_policy": true,
+        "engagement_initiatives": true,
+        "wellbeing_programs": true,
+        "anti_retaliation": "protected",
+        "employee_forums": "available",
+        "town_halls": "regular"
+      },
+      "scoring_guide": {
+        "5": "Strong DEI, proactive culture - matches/exceeds TCS",
+        "4": "Documented culture programs - meets TCS standard",
+        "3": "Standard HR practices - slightly below TCS",
+        "2": "Minimal employee engagement - significantly below TCS",
+        "1": "No grievance redressal - major gaps",
+        "0": "Toxic culture indicators - no policy or violation"
+      },
+      "red_flags": [
+        "No anti-harassment policy",
+        "No grievance mechanism",
+        "No DEI initiatives",
+        "Missing code of conduct",
+        "No employee engagement programs"
+      ]
+    },
+    
+    "legal_compliance": {
+      "id": 7,
+      "weight": 10,
+      "description": "Compliance with local labour laws and statutory requirements",
+      "what_to_extract": ["PF/ESI handling", "Legal leave compliances", "POSH compliance", "Minimum wage alignment", "Labor law audits"],
+      "tcs_baseline": {
+        "pf_esi": "fully compliant",
+        "posh_committee": "ICC established with trained members",
+        "minimum_wage": "compliant and above",
+        "statutory_leaves": "all provided as per law",
+        "labor_law_audit": "annual internal audit",
+        "ehs_compliance": true,
+        "gratuity": "as per Payment of Gratuity Act",
+        "shops_establishment_act": "registered"
+      },
+      "scoring_guide": {
+        "5": "Full compliance with audits - matches/exceeds TCS",
+        "4": "Proactive compliance framework - meets TCS standard",
+        "3": "Standard compliance - slightly below TCS",
+        "2": "Bare minimum compliance - significantly below TCS",
+        "1": "Partial non-compliance - major gaps",
+        "0": "Violation of labour laws - DEAL BREAKER"
+      },
+      "red_flags": [
+        "Missing POSH committee (DEAL BREAKER)",
+        "No PF/ESI registration",
+        "Below minimum wage (DEAL BREAKER)",
+        "No statutory compliance documentation",
+        "Labor law violations"
+      ],
+      "deal_breaker": true
+    },
+    
+    "exit_separation": {
+      "id": 8,
+      "weight": 10,
+      "description": "Fairness and clarity during exit processes",
+      "what_to_extract": ["Layoff terms", "Severance policy", "Notice period during exit", "F&F timeline", "Exit interview process"],
+      "tcs_baseline": {
+        "severance_policy": "structured based on tenure",
+        "notice_period": "mutual (employee and employer)",
+        "full_final_settlement": "within 45 days",
+        "exit_interview": "conducted for all exits",
+        "layoff_terms": "documented with proper process",
+        "rehire_eligibility": "defined criteria",
+        "experience_letter": "provided",
+        "relieving_letter": "provided"
+      },
+      "scoring_guide": {
+        "5": "Employee-centric, ethical exits - matches/exceeds TCS",
+        "4": "Transparent, structured - meets TCS standard",
+        "3": "Standard practices - slightly below TCS",
+        "2": "Below industry norms - significantly below TCS",
+        "1": "Ambiguous severance - major gaps",
+        "0": "Unfair separation practices - no policy or violation"
+      },
+      "red_flags": [
+        "No severance policy",
+        "F&F timeline > 60 days",
+        "No exit process documentation",
+        "Unilateral termination without cause",
+        "No exit interview"
+      ]
+    },
+    
+    "data_privacy_confidentiality": {
+      "id": 9,
+      "weight": 5,
+      "description": "Employee data protection and confidentiality",
+      "what_to_extract": ["Data protection policy", "Confidentiality clauses", "Monitoring rules", "Access control measures"],
+      "tcs_baseline": {
+        "data_protection_policy": true,
+        "confidentiality_clauses": "comprehensive in contracts",
+        "access_control": "role-based access",
+        "monitoring_rules": "disclosed to employees",
+        "gdpr_compliance": "where applicable",
+        "data_retention": "defined policy",
+        "nda_required": true
+      },
+      "scoring_guide": {
+        "5": "Comprehensive data protection framework - matches/exceeds TCS",
+        "4": "Strong confidentiality protocols - meets TCS standard",
+        "3": "Standard privacy practices - slightly below TCS",
+        "2": "Minimal data protection - significantly below TCS",
+        "1": "Weak confidentiality provisions - major gaps",
+        "0": "No data privacy policy - no policy or violation"
+      },
+      "red_flags": [
+        "No mention of data privacy",
+        "Unclear monitoring practices",
+        "No access control measures",
+        "Missing confidentiality clauses"
+      ]
+    },
+    
+    "training_development": {
+      "id": 10,
+      "weight": 5,
+      "description": "Learning and career development opportunities",
+      "what_to_extract": ["Learning programs", "Training expectations", "Career development pathways", "Mentorship programs"],
+      "tcs_baseline": {
+        "learning_programs": "comprehensive (iEvolve platform)",
+        "training_budget": "allocated per employee",
+        "career_pathways": "documented",
+        "mentorship": "formal program available",
+        "skill_development": "continuous learning culture",
+        "certification_support": "reimbursement available",
+        "internal_mobility": "encouraged"
+      },
+      "scoring_guide": {
+        "5": "Comprehensive training and mentorship - matches/exceeds TCS",
+        "4": "Structured career development - meets TCS standard",
+        "3": "Standard development practices - slightly below TCS",
+        "2": "Basic training programs - significantly below TCS",
+        "1": "Limited learning options - major gaps",
+        "0": "No training policy - no policy or violation"
+      },
+      "red_flags": [
+        "No training policy",
+        "No career development pathways",
+        "No learning budget",
+        "Missing mentorship programs"
+      ]
+    },
+    
+    "diversity_inclusion": {
+      "id": 11,
+      "weight": 5,
+      "description": "Commitment to diversity, equity, and inclusion",
+      "what_to_extract": ["Equal opportunity statement", "Non-discrimination policies", "Inclusive language", "Support for underrepresented groups"],
+      "tcs_baseline": {
+        "equal_opportunity": "explicit statement covering all categories",
+        "non_discrimination": "comprehensive policy",
+        "inclusive_hiring": true,
+        "women_initiatives": true,
+        "pwd_support": "people with disabilities support",
+        "dei_training": "mandatory",
+        "employee_resource_groups": "available"
+      },
+      "scoring_guide": {
+        "5": "Comprehensive DEI policy and support - matches/exceeds TCS",
+        "4": "Strong DEI principles - meets TCS standard",
+        "3": "Standard DEI practices - slightly below TCS",
+        "2": "Basic non-discrimination - significantly below TCS",
+        "1": "Minimal mention of diversity - major gaps",
+        "0": "No DEI policy - no policy or violation"
+      },
+      "red_flags": [
+        "No equal opportunity mention",
+        "Discriminatory language",
+        "No non-discrimination policy",
+        "No inclusive practices"
+      ]
+    },
+    
+    "disciplinary_policy": {
+      "id": 12,
+      "weight": 2.5,
+      "description": "Fairness and clarity of disciplinary procedures",
+      "what_to_extract": ["Definitions of misconduct", "Steps for disciplinary action", "Escalation procedures", "Timeline for resolution"],
+      "tcs_baseline": {
+        "misconduct_definitions": "clearly defined categories",
+        "progressive_discipline": "verbal → written → suspension → termination",
+        "fair_hearing": "opportunity to present case",
+        "timeline": "defined for each step",
+        "documentation": "required for all actions",
+        "appeal_process": "available"
+      },
+      "scoring_guide": {
+        "5": "Transparent, fair disciplinary system - matches/exceeds TCS",
+        "4": "Structured escalation process - meets TCS standard",
+        "3": "Standard disciplinary procedure - slightly below TCS",
+        "2": "Limited action guidelines - significantly below TCS",
+        "1": "Unclear disciplinary steps - major gaps",
+        "0": "No disciplinary policy - no policy or violation"
+      },
+      "red_flags": [
+        "Vague misconduct definitions",
+        "No progressive discipline",
+        "No appeal process",
+        "Arbitrary termination allowed"
+      ]
+    },
+    
+    "employee_benefits_insurance": {
+      "id": 13,
+      "weight": 2.5,
+      "description": "Employee benefits and insurance coverage",
+      "what_to_extract": ["Health insurance", "Retirement plans", "Family support benefits", "Additional benefits (wellness programs)"],
+      "tcs_baseline": {
+        "health_insurance": "comprehensive for employee + family",
+        "life_insurance": "provided",
+        "accident_insurance": "provided",
+        "retirement_pf": "as per statute + voluntary",
+        "gratuity": "as per law",
+        "wellness_programs": "available",
+        "eap": "employee assistance program",
+        "flexible_benefits": "cafeteria approach"
+      },
+      "scoring_guide": {
+        "5": "Exceptional coverage and perks - matches/exceeds TCS",
+        "4": "Competitive benefits package - meets TCS standard",
+        "3": "Standard insurance and benefits - slightly below TCS",
+        "2": "Limited benefits and insurance - significantly below TCS",
+        "1": "Basic health coverage only - major gaps",
+        "0": "No employee benefits - no policy or violation"
+      },
+      "red_flags": [
+        "No mention of insurance",
+        "No health coverage",
+        "No retirement benefits",
+        "No family coverage"
+      ]
+    }
+  },
+  
+  "category_weights": {
+    "working_hours_compensation": 10,
+    "leave_time_off": 10,
+    "compensation_transparency": 10,
+    "employment_terms": 10,
+    "performance_management": 10,
+    "employee_relations_culture": 10,
+    "legal_compliance": 10,
+    "exit_separation": 10,
+    "data_privacy_confidentiality": 5,
+    "training_development": 5,
+    "diversity_inclusion": 5,
+    "disciplinary_policy": 2.5,
+    "employee_benefits_insurance": 2.5
+  },
+  
+  "total_points": 100,
+  "total_parameters": 13,
+  
+  "risk_thresholds": {
+    "low": {
+      "min_score": 80,
+      "max_score": 100,
+      "label": "Low Risk",
+      "description": "Strong alignment with TCS standards - Seamless integration expected",
+      "action": "PROCEED",
+      "color": "green"
+    },
+    "medium": {
+      "min_score": 60,
+      "max_score": 79,
+      "label": "Medium Risk",
+      "description": "Moderate alignment - Some policy harmonization needed (3-6 months)",
+      "action": "PROCEED WITH CAUTION",
+      "color": "yellow"
+    },
+    "high": {
+      "min_score": 40,
+      "max_score": 59,
+      "label": "High Risk",
+      "description": "Significant gaps - Major integration effort required (6-12 months)",
+      "action": "CONDITIONAL",
+      "color": "orange"
+    },
+    "critical": {
+      "min_score": 0,
+      "max_score": 39,
+      "label": "Critical Risk",
+      "description": "Major policy incompatibility - High integration risk, possible deal breakers",
+      "action": "REJECT OR RESTRUCTURE",
+      "color": "red"
+    }
+  },
+  
+  "deal_breakers": [
+    {
+      "id": "posh_missing",
+      "description": "Missing POSH committee / ICC not established",
+      "severity": "critical",
+      "legal_risk": true
+    },
+    {
+      "id": "labor_law_violations",
+      "description": "Documented labor law violations",
+      "severity": "critical",
+      "legal_risk": true
+    },
+    {
+      "id": "below_minimum_wage",
+      "description": "Paying below minimum wage",
+      "severity": "critical",
+      "legal_risk": true
+    },
+    {
+      "id": "toxic_culture",
+      "description": "Evidence of toxic culture (multiple harassment claims)",
+      "severity": "critical",
+      "legal_risk": false
+    },
+    {
+      "id": "no_grievance",
+      "description": "No grievance mechanism exists",
+      "severity": "high",
+      "legal_risk": false
+    },
+    {
+      "id": "discriminatory_practices",
+      "description": "Discriminatory hiring or employment practices",
+      "severity": "critical",
+      "legal_risk": true
+    },
+    {
+      "id": "child_labor",
+      "description": "Child labor or forced labor",
+      "severity": "critical",
+      "legal_risk": true
+    },
+    {
+      "id": "no_pf_esi",
+      "description": "No PF/ESI registration or compliance",
+      "severity": "critical",
+      "legal_risk": true
+    }
+  ],
+  
+  "integration_effort_matrix": {
+    "low": {
+      "score_range": "80-100",
+      "timeline": "0-3 months",
+      "effort": "Minor policy updates, quick harmonization",
+      "cost_indicator": "$"
+    },
+    "medium": {
+      "score_range": "60-79",
+      "timeline": "3-6 months",
+      "effort": "Moderate policy changes, training required",
+      "cost_indicator": "$$"
+    },
+    "high": {
+      "score_range": "40-59",
+      "timeline": "6-12 months",
+      "effort": "Major policy overhaul, significant training, possible restructuring",
+      "cost_indicator": "$$$"
+    },
+    "critical": {
+      "score_range": "0-39",
+      "timeline": "12+ months",
+      "effort": "Complete policy rebuild, cultural transformation",
+      "cost_indicator": "$$$$"
+    }
+  }
+}
+      "weight": 5,
+      "description": "Learning and career development opportunities",
+      "tcs_baseline": {
+        "learning_programs": "comprehensive",
+        "training_budget": "allocated per employee",
+        "career_pathways": "documented",
+        "mentorship": "available",
+        "skill_development": "continuous",
+        "certification_support": true
+      },
+      "scoring_guide": {
+        "5": "Comprehensive training and mentorship",
+        "4": "Structured career development",
+        "3": "Standard development practices",
+        "2": "Basic training programs",
+        "1": "Limited learning options",
+        "0": "No training policy"
+      },
+      "red_flags": [
+        "No training policy",
+        "No career development pathways",
+        "No learning budget",
+        "Missing mentorship programs"
+      ]
+    }
+  },
+  
+  "category_weights": {
+    "working_hours_compensation": 10,
+    "leave_time_off": 15,
+    "compensation_transparency": 12,
+    "employment_terms": 10,
+    "performance_management": 10,
+    "employee_relations_culture": 12,
+    "legal_compliance": 13,
+    "exit_separation": 8,
+    "data_privacy_confidentiality": 5,
+    "training_development": 5
+  },
+  
+  "total_points": 100,
+  
+  "risk_thresholds": {
+    "low": {
+      "min_score": 80,
+      "max_score": 100,
+      "description": "Strong alignment with TCS standards - Seamless integration expected",
+      "action": "PROCEED"
+    },
+    "medium": {
+      "min_score": 60,
+      "max_score": 79,
+      "description": "Moderate alignment - Some policy harmonization needed",
+      "action": "PROCEED WITH CAUTION"
+    },
+    "high": {
+      "min_score": 40,
+      "max_score": 59,
+      "description": "Significant gaps - Major integration effort required",
+      "action": "CONDITIONAL"
+    },
+    "critical": {
+      "min_score": 0,
+      "max_score": 39,
+      "description": "Major policy incompatibility - High integration risk",
+      "action": "REJECT OR RESTRUCTURE"
+    }
+  },
+  
+  "deal_breakers": [
+    "posh_compliance_missing",
+    "labor_law_violations",
+    "below_minimum_wage",
+    "toxic_culture_evidence",
+    "no_grievance_mechanism",
+    "discriminatory_practices",
+    "child_labor_or_forced_labor",
+    "systematic_overtime_violations"
+  ]
+}

@@ -1,4 +1,4 @@
-"""HR Agent graph for HR due diligence analysis."""
+"""HR Agent graph for M&A HR Policy Comparison - Acquirer Focus."""
 
 import time
 from typing import Literal
@@ -8,7 +8,17 @@ from langchain_core.messages import SystemMessage, AIMessage
 
 from src.config.llm_config import get_llm
 from src.hr_agent.state import HRAgentState
+from src.hr_agent.prompts import HR_AGENT_SYSTEM_PROMPT, HR_AGENT_COMPACT_PROMPT
 from src.hr_agent.tools import (
+    # PRIMARY: Smart Policy Comparison Tools
+    get_acquirer_baseline,
+    get_target_hr_policies,
+    compare_policy_category,
+    calculate_hr_compatibility_score,
+    get_scoring_rubrics,
+    check_deal_breakers,
+    get_integration_effort_estimate,
+    # LEGACY: Kept for backward compatibility
     analyze_employee_data,
     analyze_attrition,
     analyze_key_person_dependency,
@@ -17,71 +27,25 @@ from src.hr_agent.tools import (
     analyze_culture_fit,
     generate_hr_risk_score,
 )
-from src.rag_agent.tools import retrieve_hr_documents, retrieve_employee_records
 from src.common.logging_config import get_logger
 from src.common.utils import invoke_llm_with_retry
 
 logger = get_logger(__name__)
 
-HR_AGENT_PROMPT = """You are a Senior HR Analyst Agent specialized in M&A Due Diligence.
+# Use the new policy comparison prompt
+HR_AGENT_PROMPT = HR_AGENT_SYSTEM_PROMPT  # From prompts.py
 
-Your role is to assess human capital risks and cultural compatibility for mergers and acquisitions.
-
-## Your Responsibilities:
-1. Analyze employee metrics and attrition patterns
-2. Assess key person dependencies and succession risks
-3. Review HR compliance and employment practices
-4. Evaluate cultural fit and integration challenges
-5. Review HR policies and identify gaps
-
-## Analysis Framework:
-
-### 1. Workforce Analysis
-- Total headcount and composition
-- Attrition rates vs industry benchmarks
-- Employee satisfaction metrics
-
-### 2. Key Person Risk
-- Critical role identification
-- Succession planning status
-- Retention risk assessment
-
-### 3. HR Compliance
-- Employment disputes and claims
-- Regulatory compliance status
-- Union/CBA considerations
-
-### 4. Culture Assessment
-- Cultural compatibility analysis
-- Work style alignment
-- Integration complexity
-
-### 5. Policy Review
-- HR policy completeness
-- Gap analysis
-- Harmonization needs
-
-## Red Flags to Watch:
-- High attrition rates (>20% above benchmark)
-- Multiple key person departures
-- Discrimination claims or EEOC complaints
-- Low employee satisfaction (<60%)
-- Missing critical HR policies
-- Significant culture mismatch
-
-## Output Format:
-- Provide structured HR analysis
-- Quantify people risks where possible
-- Rate severity of each risk area
-- Give integration recommendations
-- Calculate overall HR risk score (0-1)
-
-First retrieve the relevant HR documents, then perform your analysis systematically.
-"""
-
+# Define tools for HR Agent (prioritize policy comparison tools)
 hr_tools = [
-    retrieve_hr_documents,
-    retrieve_employee_records,
+    # PRIMARY: Smart Policy Comparison Tools
+    get_acquirer_baseline,
+    get_target_hr_policies,
+    compare_policy_category,
+    calculate_hr_compatibility_score,
+    get_scoring_rubrics,
+    check_deal_breakers,
+    get_integration_effort_estimate,
+    # SECONDARY: Legacy tools (if needed)
     analyze_employee_data,
     analyze_attrition,
     analyze_key_person_dependency,
