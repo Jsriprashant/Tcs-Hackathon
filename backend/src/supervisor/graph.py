@@ -83,6 +83,8 @@ from src.supervisor.parsers import (
     parse_legal_agent_output,
     create_finance_agent_input,
     parse_finance_agent_output,
+    create_hr_agent_input,
+    parse_hr_agent_output,
     ConsolidatedResult,
 )
 
@@ -1217,25 +1219,66 @@ def legal_agent_node(state: SupervisorState) -> dict:
 
 
 def hr_agent_node(state: SupervisorState) -> dict:
-    """Invoke the HR agent."""
-    log_agent_action(logger, "supervisor", "invoking_hr_agent", {})
+    """
+    Invoke the HR agent with proper input/output transformation.
     
-    result = hr_agent.invoke({
-        "messages": state.messages,
-        "deal_type": state.deal_type,
-        "target_company": state.target,
-        "acquirer_company": state.acquirer,
+    Uses parsers to:
+    1. Transform supervisor state → HR agent input format (prompt with company)
+    2. Parse HR agent output → AgentOutput model with compatibility score
+    """
+    log_agent_action(logger, "supervisor", "invoking_hr_agent", {
+        "target": state.target.company_name if state.target else None,
     })
     
-    new_agents_completed = list(state.agents_completed) + ["hr_agent"]
-    
-    return {
-        "messages": result.get("messages", []),
-        "agents_invoked": state.agents_invoked + ["hr_agent"],
-        "agents_completed": new_agents_completed,
-        "current_phase": "strategic_analysis",
-        "execution_phase": "domain_analysis",
-    }
+    try:
+        # Create properly formatted input using parser
+        agent_input = create_hr_agent_input(state)
+        
+        # Invoke HR agent
+        result = hr_agent.invoke(agent_input)
+        
+        # Parse output into structured AgentOutput
+        agent_output = parse_hr_agent_output(result)
+        
+        # Update agent_outputs dict
+        new_agent_outputs = dict(state.agent_outputs)
+        new_agent_outputs["hr_agent"] = agent_output
+        
+        log_agent_action(logger, "supervisor", "hr_agent_complete", {
+            "risk_score": agent_output.risk_score,
+            "risk_level": agent_output.risk_level.value,
+            "findings_count": len(agent_output.findings),
+        })
+        
+        new_agents_completed = list(state.agents_completed) + ["hr_agent"]
+        
+        return {
+            "messages": result.get("messages", []),
+            "agents_invoked": state.agents_invoked + ["hr_agent"],
+            "agents_completed": new_agents_completed,
+            "agent_outputs": new_agent_outputs,
+            "current_phase": "strategic_analysis",
+            "execution_phase": "domain_analysis",
+        }
+        
+    except ValueError as e:
+        logger.error(f"HR agent input error: {e}")
+        return {
+            "messages": [AIMessage(content=f"HR analysis skipped: {str(e)}")],
+            "agents_invoked": state.agents_invoked + ["hr_agent"],
+            "agents_completed": list(state.agents_completed) + ["hr_agent"],
+            "current_phase": "strategic_analysis",
+            "execution_phase": "domain_analysis",
+        }
+    except Exception as e:
+        logger.error(f"HR agent error: {e}")
+        return {
+            "messages": [AIMessage(content=f"HR analysis encountered an error: {str(e)}")],
+            "agents_invoked": state.agents_invoked + ["hr_agent"],
+            "agents_completed": list(state.agents_completed) + ["hr_agent"],
+            "current_phase": "strategic_analysis",
+            "execution_phase": "domain_analysis",
+        }
 
 
 def analyst_agent_node(state: SupervisorState) -> dict:

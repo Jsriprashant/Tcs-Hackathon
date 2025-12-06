@@ -550,36 +550,10 @@
       "effort": "Complete policy rebuild, cultural transformation",
       "cost_indicator": "$$$$"
     }
-  }
-}
-      "weight": 5,
-      "description": "Learning and career development opportunities",
-      "tcs_baseline": {
-        "learning_programs": "comprehensive",
-        "training_budget": "allocated per employee",
-        "career_pathways": "documented",
-        "mentorship": "available",
-        "skill_development": "continuous",
-        "certification_support": true
-      },
-      "scoring_guide": {
-        "5": "Comprehensive training and mentorship",
-        "4": "Structured career development",
-        "3": "Standard development practices",
-        "2": "Basic training programs",
-        "1": "Limited learning options",
-        "0": "No training policy"
-      },
-      "red_flags": [
-        "No training policy",
-        "No career development pathways",
-        "No learning budget",
-        "Missing mentorship programs"
-      ]
-    }
   },
   
-  "category_weights": {
+  "legacy_category_weights": {
+    "_comment": "Alternative weighting scheme for reference",
     "working_hours_compensation": 10,
     "leave_time_off": 15,
     "compensation_transparency": 12,
@@ -592,36 +566,7 @@
     "training_development": 5
   },
   
-  "total_points": 100,
-  
-  "risk_thresholds": {
-    "low": {
-      "min_score": 80,
-      "max_score": 100,
-      "description": "Strong alignment with TCS standards - Seamless integration expected",
-      "action": "PROCEED"
-    },
-    "medium": {
-      "min_score": 60,
-      "max_score": 79,
-      "description": "Moderate alignment - Some policy harmonization needed",
-      "action": "PROCEED WITH CAUTION"
-    },
-    "high": {
-      "min_score": 40,
-      "max_score": 59,
-      "description": "Significant gaps - Major integration effort required",
-      "action": "CONDITIONAL"
-    },
-    "critical": {
-      "min_score": 0,
-      "max_score": 39,
-      "description": "Major policy incompatibility - High integration risk",
-      "action": "REJECT OR RESTRUCTURE"
-    }
-  },
-  
-  "deal_breakers": [
+  "legacy_deal_breakers": [
     "posh_compliance_missing",
     "labor_law_violations",
     "below_minimum_wage",

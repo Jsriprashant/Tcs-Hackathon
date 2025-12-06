@@ -434,6 +434,279 @@ def calculate_risk_level_from_score(score: float) -> RiskLevel:
 
 
 # =============================================================================
+# HR AGENT PARSERS
+# =============================================================================
+
+def create_hr_agent_input(state) -> Dict[str, Any]:
+    """
+    Transform supervisor state into HR agent input format.
+    
+    HR Agent expects (HRAgentState with ReAct loop):
+    {
+        "messages": [HumanMessage(content="Compare HR policies for BBD...")],
+    }
+    
+    The HR agent uses tools to:
+    1. get_acquirer_baseline() - Load TCS policy baseline
+    2. get_target_hr_policies(company_id) - Retrieve target policies from ChromaDB
+    3. compare_policy_category(...) - Compare specific categories
+    4. calculate_hr_compatibility_score(...) - Calculate final score
+    
+    Args:
+        state: Current supervisor state with target company info
+        
+    Returns:
+        Dict formatted for hr_agent.invoke()
+        
+    Raises:
+        ValueError: If no target company is specified
+    """
+    from langchain_core.messages import HumanMessage
+    
+    if not state.target:
+        raise ValueError("HR agent requires target company to be specified")
+    
+    company_id = state.target.company_id.upper()
+    company_name = state.target.company_name
+    acquirer_name = state.acquirer.company_name if state.acquirer else "TCS"
+    
+    logger.info(f"Creating HR agent input for company_id: {company_id}")
+    
+    # Create detailed analysis prompt for the HR agent
+    analysis_prompt = f"""Perform a comprehensive HR policy comparison between {acquirer_name} (acquirer) and {company_name} ({company_id}) (target).
+
+## Instructions
+
+1. **Get Acquirer Baseline**: Use `get_acquirer_baseline` to load TCS HR policy standards
+2. **Get Target Policies**: Use `get_target_hr_policies` with company_id="{company_id}" to retrieve target's HR policies
+3. **Compare Categories**: For each of these 10 categories, use `compare_policy_category`:
+   - working_hours_compensation
+   - leave_time_off
+   - compensation_transparency
+   - employment_terms
+   - performance_management
+   - employee_relations_culture
+   - legal_compliance
+   - exit_separation
+   - data_privacy_confidentiality
+   - training_development
+
+4. **Calculate Score**: Use `calculate_hr_compatibility_score` with your parameter evaluations
+
+5. **Check Deal Breakers**: Use `check_deal_breakers` to identify critical issues
+
+6. **Final Report**: Provide a structured HR due diligence report with:
+   - Overall compatibility score (0-100)
+   - Risk level (low/medium/high/critical)
+   - Key policy gaps identified
+   - Red flags and deal breakers
+   - Integration recommendations
+
+Target Company: {company_name} ({company_id})
+Acquirer Company: {acquirer_name}
+Deal Type: {state.deal_type or 'acquisition'}"""
+    
+    return {
+        "messages": [HumanMessage(content=analysis_prompt)],
+    }
+
+
+def parse_hr_agent_output(result: Dict[str, Any]) -> AgentOutput:
+    """
+    Parse HR agent output into structured AgentOutput.
+    
+    HR Agent returns ReAct-style output with tool calls.
+    The structured data is in the messages from tool responses.
+    
+    Key data to extract:
+    - Overall compatibility score (0-100)
+    - Risk level (low/medium/high/critical)
+    - Policy gaps
+    - Red flags and deal breakers
+    - Integration recommendations
+    
+    Args:
+        result: Raw output from hr_agent.invoke()
+        
+    Returns:
+        AgentOutput with standardized structure
+    """
+    messages = result.get("messages", [])
+    
+    if not messages:
+        logger.warning("HR agent returned no messages")
+        return AgentOutput(
+            agent_name="hr_agent",
+            domain="hr",
+            summary="HR analysis completed but no output available.",
+            risk_score=0.5,
+            risk_level=RiskLevel.MEDIUM,
+            confidence=0.5,
+            data_quality="low",
+        )
+    
+    # Extract data from messages
+    compatibility_score = None
+    risk_level_str = None
+    policy_gaps = []
+    red_flags = []
+    deal_breakers = []
+    recommendations = []
+    raw_response = ""
+    
+    for msg in messages:
+        content = msg.content if hasattr(msg, 'content') else str(msg)
+        
+        # Try to parse compatibility score from tool responses
+        if "overall score" in content.lower() or "compatibility score" in content.lower():
+            # Look for score patterns like "Score: 65/100" or "65%"
+            import re
+            score_match = re.search(r'(\d+(?:\.\d+)?)\s*[/%]\s*100|\b(\d+(?:\.\d+)?)\s*%', content)
+            if score_match:
+                score_val = score_match.group(1) or score_match.group(2)
+                try:
+                    compatibility_score = float(score_val)
+                except ValueError:
+                    pass
+        
+        # Extract risk level
+        if "risk level" in content.lower():
+            if "critical" in content.lower():
+                risk_level_str = "critical"
+            elif "high" in content.lower():
+                risk_level_str = "high"
+            elif "medium" in content.lower() or "moderate" in content.lower():
+                risk_level_str = "medium"
+            elif "low" in content.lower():
+                risk_level_str = "low"
+        
+        # Extract policy gaps (look for gap-related content)
+        if "gap" in content.lower():
+            gap_lines = [line.strip() for line in content.split('\n') 
+                        if 'gap' in line.lower() and len(line.strip()) > 10]
+            policy_gaps.extend(gap_lines[:5])
+        
+        # Extract red flags
+        if "red flag" in content.lower() or "⚠️" in content:
+            flag_lines = [line.strip() for line in content.split('\n') 
+                         if ('red flag' in line.lower() or '⚠️' in line) and len(line.strip()) > 5]
+            red_flags.extend(flag_lines[:5])
+        
+        # Extract deal breakers
+        if "deal breaker" in content.lower() or "🔴" in content:
+            breaker_lines = [line.strip() for line in content.split('\n') 
+                           if 'deal breaker' in line.lower() or '🔴' in line]
+            deal_breakers.extend(breaker_lines[:3])
+        
+        # Extract recommendations
+        if "recommend" in content.lower():
+            rec_lines = [line.strip() for line in content.split('\n') 
+                        if 'recommend' in line.lower() and len(line.strip()) > 10]
+            recommendations.extend(rec_lines[:5])
+        
+        # Collect final response (last AI message without tool calls)
+        if isinstance(msg, AIMessage) and not hasattr(msg, 'tool_calls'):
+            raw_response = content
+    
+    # Determine final values
+    if compatibility_score is not None:
+        # Convert compatibility score (0-100) to risk score (0-1)
+        # High compatibility = low risk
+        risk_score = 1.0 - (compatibility_score / 100.0)
+    else:
+        # Estimate from content
+        risk_score = estimate_risk_from_content(raw_response)
+        compatibility_score = int((1 - risk_score) * 100)
+    
+    # Map risk level
+    if risk_level_str:
+        risk_level_map = {
+            "low": RiskLevel.LOW,
+            "medium": RiskLevel.MEDIUM,
+            "high": RiskLevel.HIGH,
+            "critical": RiskLevel.CRITICAL,
+        }
+        risk_level = risk_level_map.get(risk_level_str, RiskLevel.MEDIUM)
+    else:
+        risk_level = calculate_risk_level_from_score(risk_score)
+    
+    # Build findings from policy gaps
+    findings = []
+    key_findings = []
+    
+    for gap in policy_gaps[:10]:
+        severity = "medium"
+        if any(kw in gap.lower() for kw in ["critical", "major", "significant"]):
+            severity = "high"
+        elif any(kw in gap.lower() for kw in ["minor", "small"]):
+            severity = "low"
+        
+        findings.append(Finding(
+            category="hr_policy",
+            title=gap[:50] if len(gap) > 50 else gap,
+            description=gap,
+            severity=severity,
+        ))
+        
+        if severity == "high":
+            key_findings.append(f"[HIGH] {gap[:60]}")
+    
+    # Add red flags to key findings
+    for flag in red_flags[:3]:
+        key_findings.append(f"[FLAG] {flag[:60]}")
+    
+    # Add deal breakers as critical findings
+    for breaker in deal_breakers:
+        findings.append(Finding(
+            category="hr_policy",
+            title=f"Deal Breaker: {breaker[:40]}",
+            description=breaker,
+            severity="critical",
+        ))
+        key_findings.insert(0, f"[CRITICAL] {breaker[:60]}")
+    
+    # Build summary
+    compatibility_rating = "Unknown"
+    if compatibility_score >= 80:
+        compatibility_rating = "HIGH - Strong alignment"
+    elif compatibility_score >= 60:
+        compatibility_rating = "MODERATE - Some gaps"
+    elif compatibility_score >= 40:
+        compatibility_rating = "LOW - Significant gaps"
+    else:
+        compatibility_rating = "CRITICAL - Major incompatibility"
+    
+    summary = f"""HR Policy Compatibility Score: {compatibility_score}/100
+
+Risk Level: {risk_level.value.upper()}
+Compatibility: {compatibility_rating}
+
+Policy Gaps Identified: {len(policy_gaps)}
+Red Flags: {len(red_flags)}
+Deal Breakers: {len(deal_breakers)}
+
+Key Areas of Concern:
+{chr(10).join(['- ' + gap[:80] for gap in policy_gaps[:3]]) if policy_gaps else '- None identified'}"""
+    
+    return AgentOutput(
+        agent_name="hr_agent",
+        domain="hr",
+        summary=summary,
+        findings=findings,
+        key_findings=key_findings[:5],
+        risk_score=risk_score,
+        risk_level=risk_level,
+        risk_factors=[],
+        recommendations=recommendations[:5] if recommendations else ["Conduct detailed policy harmonization review"],
+        red_flags=red_flags[:5],
+        positive_factors=[],
+        confidence=0.75,
+        data_quality="medium",
+        raw_response=raw_response[:2000] if raw_response else None,
+    )
+
+
+# =============================================================================
 # CONSOLIDATED OUTPUT MODEL
 # =============================================================================
 
