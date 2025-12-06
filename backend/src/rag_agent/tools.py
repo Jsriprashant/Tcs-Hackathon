@@ -143,15 +143,23 @@ def retrieve_legal_documents(
         if not search_query:
             search_query = f"{normalized_id} legal document"
         
-        # Build filter
-        filter_dict = {"company_id": normalized_id}
-        if doc_type:
-            filter_dict["doc_type"] = doc_type
+        # Build filter using ChromaDB $and syntax for multiple conditions
+        if doc_type and normalized_id:
+            filter_dict = {
+                "$and": [
+                    {"company_id": normalized_id},
+                    {"doc_type": doc_type}
+                ]
+            }
+        elif normalized_id:
+            filter_dict = {"company_id": normalized_id}
+        else:
+            filter_dict = None
         
         docs = vectorstore.similarity_search(
             search_query,
             k=k,
-            filter=filter_dict if len(filter_dict) > 1 else {"company_id": normalized_id}
+            filter=filter_dict
         )
         
         if not docs:
@@ -251,9 +259,15 @@ def retrieve_employee_records(
         
         search_query = f"{normalized_id} employee {department}".strip()
         
-        filter_dict = {"company_id": normalized_id, "doc_type": "employee_record"}
+        # Build filter using ChromaDB $and syntax for multiple conditions
+        filter_conditions = [
+            {"company_id": normalized_id},
+            {"doc_type": "employee_record"}
+        ]
         if department:
-            filter_dict["department"] = department
+            filter_conditions.append({"department": department})
+        
+        filter_dict = {"$and": filter_conditions}
         
         docs = vectorstore.similarity_search(
             search_query,

@@ -398,6 +398,9 @@ def _extract_text_via_ocr(filepath: Path) -> str:
     """
     Extract text from scanned PDF using OCR.
     
+    Uses PyMuPDF (fitz) to render pages to images, then Tesseract for OCR.
+    This approach doesn't require Poppler.
+    
     Args:
         filepath: Path to PDF file
         
@@ -405,19 +408,34 @@ def _extract_text_via_ocr(filepath: Path) -> str:
         Extracted text string
     """
     try:
-        from pdf2image import convert_from_path
+        import fitz  # PyMuPDF
         import pytesseract
+        from PIL import Image
+        import io
+        from src.config.settings import get_settings
         
-        # Convert PDF pages to images
-        images = convert_from_path(filepath, dpi=200)
+        # Configure Tesseract path
+        settings = get_settings()
+        if settings.tesseract_cmd:
+            pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
         
+        doc = fitz.open(str(filepath))
         text_parts = []
-        for i, image in enumerate(images):
-            # Run OCR on each page
-            page_text = pytesseract.image_to_string(image)
-            if page_text.strip():
-                text_parts.append(f"[Page {i + 1}]\n{page_text}")
         
+        for page_num in range(min(len(doc), 50)):  # Limit to 50 pages for performance
+            page = doc.load_page(page_num)
+            # Render page to image at 150 DPI for good OCR quality
+            mat = fitz.Matrix(150/72, 150/72)
+            pix = page.get_pixmap(matrix=mat)
+            img_data = pix.tobytes("png")
+            img = Image.open(io.BytesIO(img_data))
+            
+            # Run OCR on the page image
+            page_text = pytesseract.image_to_string(img)
+            if page_text.strip():
+                text_parts.append(f"[Page {page_num + 1}]\n{page_text}")
+        
+        doc.close()
         return "\n\n".join(text_parts)
         
     except ImportError as e:

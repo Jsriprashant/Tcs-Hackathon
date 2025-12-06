@@ -1,11 +1,18 @@
 """
 Supervisor Agent Graph - Main orchestrator for M&A Due Diligence.
 
+ENHANCED v2.0:
+- Intelligent intent classification with scope detection
+- Dynamic analysis planning
+- Risk aggregation with weighted scoring
+- Master analyst for final recommendation
+- Support for single-domain and full analyses
+
 This module implements the main LangGraph workflow that coordinates
 all specialized agents for comprehensive due diligence analysis.
 """
 
-from typing import Literal, Any
+from typing import Literal, Any, List, Dict, Optional
 from langgraph.graph import StateGraph, END, START
 from langgraph.prebuilt import ToolNode
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -14,17 +21,53 @@ import time
 
 from src.config.llm_config import get_llm
 from src.supervisor.state import SupervisorState
-from src.supervisor.prompts import SUPERVISOR_SYSTEM_PROMPT, ROUTING_PROMPT
+from src.supervisor.prompts import (
+    SUPERVISOR_SYSTEM_PROMPT, 
+    ROUTING_PROMPT,
+    MASTER_ANALYST_PROMPT,
+    INTELLIGENT_ROUTING_PROMPT,
+    DOMAIN_SUMMARY_PROMPT,
+    RISK_AGGREGATION_PROMPT,
+    GREETING_PROMPT,
+    HELP_PROMPT,
+    INFORMATIONAL_REDIRECT_PROMPT,
+)
 from src.common.logging_config import get_logger, log_agent_action
 from src.common.guardrails import PIIFilter, InputValidator
 from src.common.state import CompanyInfo
 
-# Import intent classifier (Phase 1)
+# Import intent classifier (Enhanced)
 from src.common.intent_classifier import (
     classify_intent,
+    classify_intent_enhanced,
     get_last_human_message,
     IntentType,
     IntentClassificationResult,
+)
+
+# Import enhanced models
+from src.supervisor.models import (
+    AnalysisScope,
+    DealType,
+    EnhancedIntentResult,
+    AgentOutput,
+    DomainRiskScore,
+    AggregatedRisk,
+    DealAnalysis,
+    ReasoningStep,
+    RiskLevel,
+    Recommendation,
+    DOMAIN_WEIGHTS,
+    calculate_risk_level,
+    get_recommendation_from_risk,
+)
+
+# Import planner
+from src.supervisor.planner import (
+    create_analysis_plan,
+    get_next_agents,
+    is_plan_complete,
+    get_pending_agents,
 )
 
 # Import sub-agents
@@ -46,81 +89,20 @@ AGENTS = {
 }
 
 
-def get_greeting_response() -> str:
-    """Get a friendly greeting response."""
-    return """Hello! 👋 I'm your AI-powered M&A Due Diligence Assistant.
-
-I can help you with comprehensive due diligence analysis for mergers and acquisitions, including:
-
-📊 **Financial Analysis** - Analyze financial statements, calculate key ratios, identify red flags
-⚖️ **Legal Review** - Review contracts, litigation history, IP portfolio, compliance issues
-👥 **HR Assessment** - Evaluate workforce metrics, key person dependencies, cultural fit
-📈 **Strategic Analysis** - Assess synergies, market position, deal recommendations
-
-**To get started, you can:**
-- Ask me to analyze a specific company
-- Request a full due diligence report
-- Ask specific questions about financial, legal, or HR aspects
-
-How can I assist you with your M&A due diligence today?"""
-
-
-def get_help_response() -> str:
-    """Get a help/capabilities response."""
-    return """# M&A Due Diligence Assistant - Capabilities
-
-I'm an AI-powered platform designed to streamline M&A due diligence processes. Here's what I can do:
-
-## 🔍 Available Analyses
-
-### Financial Due Diligence
-- Revenue and profitability analysis
-- Cash flow assessment
-- Debt and liability review
-- Financial ratio calculations
-- Red flag identification
-
-### Legal Due Diligence
-- Contract analysis (change of control provisions)
-- Litigation history review
-- IP portfolio assessment
-- Regulatory compliance check
-
-### HR Due Diligence
-- Employee metrics analysis
-- Attrition and retention assessment
-- Key person dependency evaluation
-- Cultural fit analysis
-
-### Strategic Analysis
-- Synergy estimation
-- Market position analysis
-- Deal structure recommendations
-- Go/No-Go recommendations
-
-## 💡 Example Queries
-
-- "Analyze the financial health of TechCorp for acquisition"
-- "What are the legal risks in acquiring StartupXYZ?"
-- "Provide a full due diligence report for the merger between CompanyA and CompanyB"
-- "What synergies can we expect from this horizontal merger?"
-
-What would you like to analyze?"""
-
-
 # =============================================================================
-# INTENT CLASSIFICATION NODE (Phase 3)
+# INTENT CLASSIFICATION NODE (Enhanced v2.0)
 # This node runs FIRST to classify user intent and gate chain activation
 # =============================================================================
 
 def intent_classifier_node(state: SupervisorState) -> dict:
     """
-    Classifies user intent and extracts company names.
+    Enhanced intent classification with analysis scope detection.
     
-    This node runs first, before any routing decision. It determines whether
-    the full agent chain should be activated based on:
-    1. Intent type (must be MA_DUE_DILIGENCE)
-    2. Company names being present (acquirer and/or target)
+    This node runs first, before any routing decision. It determines:
+    1. Intent type (MA_DUE_DILIGENCE, MA_QUESTION, etc.)
+    2. Analysis scope (FULL, FINANCIAL_ONLY, LEGAL_ONLY, etc.)
+    3. Company names (acquirer and/or target)
+    4. Required domains for analysis
     
     Args:
         state: Current supervisor state
@@ -128,7 +110,7 @@ def intent_classifier_node(state: SupervisorState) -> dict:
     Returns:
         Dict with intent classification results and optional company info
     """
-    log_agent_action(logger, "intent_classifier", "classifying_intent", {})
+    log_agent_action(logger, "intent_classifier", "classifying_intent_enhanced", {})
     
     # Get last user message
     last_message = get_last_human_message(state.messages)
@@ -140,48 +122,60 @@ def intent_classifier_node(state: SupervisorState) -> dict:
             "intent_type": "UNKNOWN",
             "intent_confidence": 0.0,
             "chain_activated": False,
+            "execution_phase": "complete",
         }
     
-    # Classify intent using the intent classifier module
-    result: IntentClassificationResult = classify_intent(last_message)
+    # Use enhanced classification
+    enhanced_result: EnhancedIntentResult = classify_intent_enhanced(last_message)
     
-    log_agent_action(logger, "intent_classifier", "classification_result", {
-        "intent": result.intent.value,
-        "confidence": result.confidence,
-        "acquirer": result.acquirer_company,
-        "target": result.target_company,
-        "should_activate_chain": result.should_activate_chain,
+    log_agent_action(logger, "intent_classifier", "enhanced_classification_result", {
+        "intent": enhanced_result.intent,
+        "confidence": enhanced_result.confidence,
+        "analysis_scope": enhanced_result.analysis_scope.value if enhanced_result.analysis_scope else None,
+        "acquirer": enhanced_result.acquirer_company,
+        "target": enhanced_result.target_company,
+        "required_domains": enhanced_result.required_domains,
+        "should_activate_chain": enhanced_result.should_activate_chain,
     })
     
     # Build state updates
     updates = {
         "intent_classified": True,
-        "intent_type": result.intent.value,
-        "intent_confidence": result.confidence,
-        "chain_activated": result.should_activate_chain,
+        "intent_type": enhanced_result.intent,
+        "intent_confidence": enhanced_result.confidence,
+        "chain_activated": enhanced_result.should_activate_chain,
+        "enhanced_intent": enhanced_result,
+        "analysis_scope": enhanced_result.analysis_scope,
+        "required_domains": enhanced_result.required_domains,
+        "execution_phase": "intent_classification",
     }
     
     # Extract and set companies if M&A due diligence with company names
-    if result.intent == IntentType.MA_DUE_DILIGENCE and result.should_activate_chain:
-        if result.acquirer_company:
+    if enhanced_result.intent == "MA_DUE_DILIGENCE" and enhanced_result.should_activate_chain:
+        if enhanced_result.acquirer_company:
             updates["acquirer"] = CompanyInfo(
-                company_id=result.acquirer_company.lower().replace(" ", "_"),
-                company_name=result.acquirer_company,
+                company_id=enhanced_result.acquirer_company.lower().replace(" ", "_"),
+                company_name=enhanced_result.acquirer_company,
                 industry="Unknown"  # Will be populated by RAG agent
             )
-            logger.info(f"Set acquirer company: {result.acquirer_company}")
+            logger.info(f"Set acquirer company: {enhanced_result.acquirer_company}")
         
-        if result.target_company:
+        if enhanced_result.target_company:
             updates["target"] = CompanyInfo(
-                company_id=result.target_company.lower().replace(" ", "_"),
-                company_name=result.target_company,
+                company_id=enhanced_result.target_company.lower().replace(" ", "_"),
+                company_name=enhanced_result.target_company,
                 industry="Unknown"  # Will be populated by RAG agent
             )
-            logger.info(f"Set target company: {result.target_company}")
+            logger.info(f"Set target company: {enhanced_result.target_company}")
+        
+        # Set deal type
+        if enhanced_result.deal_type:
+            updates["deal_type"] = enhanced_result.deal_type.value
     
     logger.info(
-        f"Intent classification complete: {result.intent.value}, "
-        f"chain_activated={result.should_activate_chain}"
+        f"Enhanced intent classification complete: {enhanced_result.intent}, "
+        f"scope={enhanced_result.analysis_scope.value if enhanced_result.analysis_scope else 'N/A'}, "
+        f"chain_activated={enhanced_result.should_activate_chain}"
     )
     
     return updates
@@ -194,8 +188,7 @@ def route_after_intent(state: SupervisorState) -> str:
     This function is called after intent_classifier_node to determine
     the next node in the graph based on the classified intent.
     
-    Only routes to supervisor (and agent chain) for MA_DUE_DILIGENCE with companies.
-    All other intents route to specialized handlers that respond directly.
+    ENHANCED: Routes to analysis_planner for MA_DUE_DILIGENCE before supervisor.
     
     Args:
         state: Current supervisor state with intent classification
@@ -208,12 +201,13 @@ def route_after_intent(state: SupervisorState) -> str:
     log_agent_action(logger, "intent_router", "routing_decision", {
         "intent": intent,
         "chain_activated": state.chain_activated,
+        "analysis_scope": state.analysis_scope.value if state.analysis_scope else None,
     })
     
-    # MA_DUE_DILIGENCE with companies -> full agent chain via supervisor
+    # MA_DUE_DILIGENCE with companies -> go to analysis planner first
     if intent == "MA_DUE_DILIGENCE" and state.chain_activated:
-        logger.info("Routing to supervisor for full agent chain execution")
-        return "supervisor"
+        logger.info("Routing to analysis_planner for execution planning")
+        return "analysis_planner"
     
     # MA_QUESTION -> answer M&A question directly (no chain)
     elif intent == "MA_QUESTION":
@@ -243,38 +237,60 @@ def route_after_intent(state: SupervisorState) -> str:
 
 def greeting_handler_node(state: SupervisorState) -> dict:
     """
-    Handle greeting queries with a friendly response.
+    Handle greeting queries with a friendly, LLM-generated response.
     
     This node responds to simple greetings without invoking any agents.
-    Uses the pre-defined greeting response for consistency.
+    Uses LLM to generate natural, contextual responses.
     """
     log_agent_action(logger, "greeting_handler", "handling_greeting", {})
     
-    response_content = get_greeting_response()
+    llm = get_llm(temperature=0.3)  # Slightly higher for natural greeting
+    last_message = get_last_human_message(state.messages) or "Hello"
     
-    logger.info("Greeting handled successfully")
-    return {
-        "messages": [AIMessage(content=response_content)],
-        "next_agent": "FINISH",
-    }
+    prompt = GREETING_PROMPT.format(user_message=last_message)
+    
+    try:
+        response = llm.invoke([SystemMessage(content=prompt)])
+        logger.info("Greeting handled successfully with LLM")
+        return {
+            "messages": [response],
+            "next_agent": "FINISH",
+        }
+    except Exception as e:
+        logger.error(f"Error generating greeting: {e}")
+        return {
+            "messages": [AIMessage(content="Hello! I'm your M&A Due Diligence Assistant. How can I help you today?")],
+            "next_agent": "FINISH",
+        }
 
 
 def help_handler_node(state: SupervisorState) -> dict:
     """
-    Handle help/capability queries with platform information.
+    Handle help/capability queries with LLM-generated platform information.
     
     This node responds to help requests without invoking any agents.
-    Uses the pre-defined help response for consistency.
+    Uses LLM to generate comprehensive, contextual help responses.
     """
     log_agent_action(logger, "help_handler", "handling_help_request", {})
     
-    response_content = get_help_response()
+    llm = get_llm(temperature=0.2)
+    last_message = get_last_human_message(state.messages) or "What can you do?"
     
-    logger.info("Help request handled successfully")
-    return {
-        "messages": [AIMessage(content=response_content)],
-        "next_agent": "FINISH",
-    }
+    prompt = HELP_PROMPT.format(user_message=last_message)
+    
+    try:
+        response = llm.invoke([SystemMessage(content=prompt)])
+        logger.info("Help request handled successfully with LLM")
+        return {
+            "messages": [response],
+            "next_agent": "FINISH",
+        }
+    except Exception as e:
+        logger.error(f"Error generating help response: {e}")
+        return {
+            "messages": [AIMessage(content="I can help with M&A due diligence including financial, legal, and HR analysis. Please provide a company name to get started.")],
+            "next_agent": "FINISH",
+        }
 
 
 def ma_question_handler_node(state: SupervisorState) -> dict:
@@ -283,31 +299,27 @@ def ma_question_handler_node(state: SupervisorState) -> dict:
     
     This node answers conceptual questions about M&A, due diligence,
     synergies, etc. without invoking the full agent chain.
-    It also prompts the user to provide company names if they want
-    to perform actual due diligence.
+    Uses LLM to provide educational, contextual responses.
     """
     log_agent_action(logger, "ma_question_handler", "handling_ma_question", {})
     
-    llm = get_llm(temperature=0.1)
+    llm = get_llm(temperature=0.2)
     
     last_message = get_last_human_message(state.messages)
     
-    prompt = f"""You are an M&A Due Diligence expert. Answer this question about M&A concepts.
+    prompt = f"""You are an expert M&A Due Diligence consultant. The user has asked a conceptual question about M&A.
 
-Question: {last_message}
+User's Question: {last_message}
 
-Provide a clear, educational answer about the M&A concept being asked.
+Provide a comprehensive, educational answer that:
+1. Directly addresses their question with expert-level insight
+2. Includes relevant examples or scenarios where helpful
+3. Mentions any important considerations or nuances
+4. If applicable, explains how this relates to due diligence
 
-At the end of your response, include this note:
----
-💡 **Want to perform actual due diligence?**
-To start a comprehensive due diligence analysis, please provide:
-1. The acquiring company name
-2. The target company name  
-3. Whether this is a merger or acquisition
+At the end, offer to help with specific company analysis if they'd like to proceed with actual due diligence.
 
-Example: "Analyze the merger between CompanyA and CompanyB"
-"""
+Respond in a professional but conversational tone:"""
     
     try:
         response = llm.invoke([SystemMessage(content=prompt)])
@@ -319,7 +331,7 @@ Example: "Analyze the merger between CompanyA and CompanyB"
     except Exception as e:
         logger.error(f"Error handling M&A question: {e}")
         return {
-            "messages": [AIMessage(content=f"I apologize, I encountered an error while processing your question. Please try again. Error: {str(e)}")],
+            "messages": [AIMessage(content=f"I apologize, I encountered an error while processing your question. Please try again.")],
             "next_agent": "FINISH",
         }
 
@@ -332,33 +344,19 @@ def informational_handler_node(state: SupervisorState) -> dict:
     - General information requests unrelated to M&A
     - Queries classified as UNKNOWN
     
-    It politely redirects users to M&A-related topics.
+    Uses LLM to provide helpful responses and redirect to M&A topics.
     """
     log_agent_action(logger, "informational_handler", "handling_informational_query", {})
     
-    llm = get_llm(temperature=0.1)
+    llm = get_llm(temperature=0.2)
     
-    last_message = get_last_human_message(state.messages)
+    last_message = get_last_human_message(state.messages) or ""
     
-    prompt = f"""You are an M&A Due Diligence Assistant. The user asked a question that may not be directly related to M&A.
-
-User's Question: {last_message}
-
-If this question is related to M&A or business topics, provide helpful information.
-If this question is completely unrelated to M&A (like weather, jokes, etc.), politely acknowledge their question briefly and then redirect them to M&A topics.
-
-Always end your response by mentioning that you specialize in:
-- 📊 Financial due diligence
-- ⚖️ Legal due diligence  
-- 👥 HR due diligence
-- 📈 Strategic analysis for mergers and acquisitions
-
-And that to start an analysis, they should provide the names of the companies involved in the merger or acquisition.
-"""
+    prompt = INFORMATIONAL_REDIRECT_PROMPT.format(user_message=last_message)
     
     try:
         response = llm.invoke([SystemMessage(content=prompt)])
-        logger.info("Informational query handled successfully")
+        logger.info("Informational query handled successfully with LLM")
         return {
             "messages": [response],
             "next_agent": "FINISH",
@@ -366,23 +364,524 @@ And that to start an analysis, they should provide the names of the companies in
     except Exception as e:
         logger.error(f"Error handling informational query: {e}")
         return {
-            "messages": [AIMessage(content="""I'm an M&A Due Diligence Assistant. I specialize in:
-
-📊 **Financial Due Diligence** - Analyze financial statements and identify risks
-⚖️ **Legal Due Diligence** - Review contracts, litigation, and compliance
-👥 **HR Due Diligence** - Assess workforce and cultural fit
-📈 **Strategic Analysis** - Evaluate synergies and deal recommendations
-
-To start an analysis, please provide the names of the companies involved in your merger or acquisition.
-
-Example: "Analyze the acquisition of TargetCorp by AcquirerInc"
-""")],
+            "messages": [AIMessage(content="I specialize in M&A due diligence. Please provide a company name to analyze, or ask me about financial, legal, or HR aspects of mergers and acquisitions.")],
             "next_agent": "FINISH",
         }
 
 
 # =============================================================================
 # END HANDLER NODES
+# =============================================================================
+
+
+# =============================================================================
+# NEW NODES (v2.0): Analysis Planner, Risk Aggregator, Master Analyst
+# =============================================================================
+
+def analysis_planner_node(state: SupervisorState) -> dict:
+    """
+    Creates execution plan based on enhanced intent classification.
+    
+    This node determines:
+    - Which agents to invoke based on analysis scope
+    - Execution order (sequential, parallel, hybrid)
+    - Output format requirements
+    
+    Args:
+        state: Current supervisor state with enhanced intent
+        
+    Returns:
+        Dict with analysis plan and initial agent routing
+    """
+    log_agent_action(logger, "analysis_planner", "creating_plan", {
+        "analysis_scope": state.analysis_scope.value if state.analysis_scope else "FULL",
+    })
+    
+    # Get enhanced intent or create default
+    if state.enhanced_intent:
+        intent_result = state.enhanced_intent
+    else:
+        # Fallback: create basic intent result
+        intent_result = EnhancedIntentResult(
+            intent="MA_DUE_DILIGENCE",
+            confidence=0.8,
+            acquirer_company=state.acquirer.company_name if state.acquirer else None,
+            target_company=state.target.company_name if state.target else None,
+            analysis_scope=state.analysis_scope or AnalysisScope.FULL_DUE_DILIGENCE,
+            required_domains=state.required_domains or ["finance", "legal", "hr"],
+            deal_type=DealType(state.deal_type) if state.deal_type else DealType.ACQUISITION,
+            depth="standard",
+            should_activate_chain=True,
+            reasoning="Fallback intent creation"
+        )
+    
+    # Create analysis plan
+    plan = create_analysis_plan(intent_result)
+    
+    log_agent_action(logger, "analysis_planner", "plan_created", {
+        "plan_id": plan.plan_id,
+        "required_agents": plan.required_agents,
+        "execution_mode": plan.execution_mode,
+        "report_format": plan.report_format,
+    })
+    
+    # Determine first agents to run (always starts with RAG)
+    first_agents = get_next_agents(plan, [], [])
+    
+    return {
+        "analysis_plan": plan,
+        "agents_pending": get_pending_agents(plan, [], []),
+        "agents_completed": [],
+        "execution_phase": "document_retrieval",
+        "current_phase": "document_retrieval",
+        "next_agent": first_agents[0] if first_agents else "FINISH",
+    }
+
+
+def risk_aggregator_node(state: SupervisorState) -> dict:
+    """
+    Aggregates risk scores from all domain agents.
+    
+    Uses weighted average with deal-breaker detection.
+    Calculates overall risk score and level.
+    
+    Args:
+        state: Current supervisor state with agent outputs
+        
+    Returns:
+        Dict with aggregated risk assessment
+    """
+    log_agent_action(logger, "risk_aggregator", "aggregating_risks", {
+        "completed_agents": state.agents_completed,
+    })
+    
+    domain_risk_scores = {}
+    deal_breakers = []
+    key_concerns = []
+    positive_factors = []
+    
+    # Process each agent output to extract risk scores
+    for agent_name in state.agents_completed:
+        if agent_name == "rag_agent":
+            continue  # RAG doesn't produce risk scores
+        
+        domain = agent_name.replace("_agent", "")
+        
+        # Try to get structured output
+        if agent_name in state.agent_outputs:
+            output = state.agent_outputs[agent_name]
+            risk_score = output.risk_score
+            risk_factors = [rf.name for rf in output.risk_factors] if output.risk_factors else []
+            recommendations = output.recommendations
+        else:
+            # Fallback: estimate from legacy results
+            risk_score = estimate_risk_from_legacy(state, agent_name)
+            risk_factors = []
+            recommendations = []
+        
+        # Create domain risk score
+        weight = DOMAIN_WEIGHTS.get(domain, 0.2)
+        domain_risk_scores[domain] = DomainRiskScore(
+            domain=domain,
+            score=risk_score,
+            weight=weight,
+            contributing_factors=risk_factors,
+            mitigations=recommendations
+        )
+        
+        # Check for high-risk items
+        if risk_score > 0.7:
+            key_concerns.append(f"{domain.title()}: High risk score ({risk_score:.2f})")
+        elif risk_score < 0.3:
+            positive_factors.append(f"{domain.title()}: Low risk ({risk_score:.2f})")
+    
+    # Calculate aggregated risk
+    if domain_risk_scores:
+        aggregated_risk = AggregatedRisk.from_domain_scores(domain_risk_scores)
+        
+        # Check for deal-breakers in outputs
+        deal_breakers = identify_deal_breakers_from_outputs(state)
+        if deal_breakers:
+            # Apply deal-breaker penalty
+            aggregated_risk.overall_score = min(aggregated_risk.overall_score + 0.25, 1.0)
+            aggregated_risk.deal_breakers = deal_breakers
+            aggregated_risk.deal_breaker_penalty_applied = True
+            aggregated_risk.risk_level = calculate_risk_level(aggregated_risk.overall_score)
+        
+        aggregated_risk.key_concerns = key_concerns
+        aggregated_risk.positive_factors = positive_factors
+    else:
+        # No domain scores available
+        aggregated_risk = AggregatedRisk(
+            overall_score=0.5,
+            risk_level=RiskLevel.MEDIUM,
+            confidence=0.5
+        )
+    
+    log_agent_action(logger, "risk_aggregator", "aggregation_complete", {
+        "overall_score": aggregated_risk.overall_score,
+        "risk_level": aggregated_risk.risk_level.value,
+        "deal_breakers_count": len(deal_breakers),
+    })
+    
+    return {
+        "domain_risk_scores": domain_risk_scores,
+        "aggregated_risk": aggregated_risk,
+        "overall_risk_score": aggregated_risk.overall_score,
+        "overall_risk_level": aggregated_risk.risk_level,
+        "execution_phase": "recommendation_generation",
+    }
+
+
+def master_analyst_node(state: SupervisorState) -> dict:
+    """
+    Master analyst that synthesizes all findings into final recommendation.
+    
+    This node:
+    1. Collects all agent outputs
+    2. Uses aggregated risk scores
+    3. Generates step-by-step reasoning
+    4. Produces final GO/NO-GO/CONDITIONAL recommendation
+    5. Formats comprehensive M&A report
+    
+    Args:
+        state: Current supervisor state with all analyses
+        
+    Returns:
+        Dict with deal analysis and final response
+    """
+    log_agent_action(logger, "master_analyst", "generating_recommendation", {
+        "overall_risk": state.overall_risk_score,
+        "completed_agents": state.agents_completed,
+    })
+    
+    llm = get_llm(temperature=0.1)
+    
+    # Format agent outputs for the prompt
+    agent_outputs_text = format_agent_outputs_for_prompt(state)
+    
+    # Build master analyst prompt
+    prompt = MASTER_ANALYST_PROMPT.format(
+        acquirer=state.acquirer.company_name if state.acquirer else "Unknown Acquirer",
+        target=state.target.company_name if state.target else "Unknown Target",
+        deal_type=state.deal_type or "acquisition",
+        agent_outputs=agent_outputs_text,
+    )
+    
+    try:
+        messages = [SystemMessage(content=prompt)]
+        response = llm.invoke(messages)
+        
+        # Determine recommendation based on aggregated risk
+        aggregated_risk = state.aggregated_risk
+        if aggregated_risk:
+            has_deal_breakers = len(aggregated_risk.deal_breakers) > 0
+            recommendation = get_recommendation_from_risk(
+                aggregated_risk.overall_score, 
+                has_deal_breakers
+            )
+        else:
+            recommendation = Recommendation.CONDITIONAL
+        
+        # Create deal analysis record
+        deal_analysis = DealAnalysis(
+            recommendation=recommendation,
+            recommendation_confidence=0.8,
+            executive_summary=extract_executive_summary(response.content),
+            reasoning_chain=extract_reasoning_chain(response.content),
+            aggregated_risk=aggregated_risk,
+            agents_consulted=state.agents_completed,
+        )
+        
+        log_agent_action(logger, "master_analyst", "recommendation_generated", {
+            "recommendation": recommendation.value,
+            "overall_risk": aggregated_risk.overall_score if aggregated_risk else "N/A",
+        })
+        
+        return {
+            "messages": [response],
+            "deal_analysis": deal_analysis,
+            "deal_recommendation": recommendation.value,
+            "recommendation_rationale": response.content[:500],
+            "execution_phase": "complete",
+            "current_phase": "complete",
+            "next_agent": "FINISH",
+        }
+        
+    except Exception as e:
+        logger.error(f"Master analyst error: {e}")
+        return {
+            "messages": [AIMessage(content=f"Error generating final analysis: {str(e)}")],
+            "next_agent": "FINISH",
+            "errors": state.errors + [str(e)],
+        }
+
+
+def domain_summarizer_node(state: SupervisorState) -> dict:
+    """
+    Summarizes single-domain analysis for targeted queries.
+    
+    Used when user requests only financial, legal, or HR analysis
+    without full due diligence.
+    
+    Args:
+        state: Current supervisor state
+        
+    Returns:
+        Dict with domain summary response
+    """
+    log_agent_action(logger, "domain_summarizer", "summarizing_domain", {
+        "analysis_scope": state.analysis_scope.value if state.analysis_scope else "N/A",
+    })
+    
+    llm = get_llm(temperature=0.1)
+    
+    # Determine which domain was analyzed
+    domain = None
+    if state.analysis_scope == AnalysisScope.FINANCIAL_ONLY:
+        domain = "Financial"
+    elif state.analysis_scope == AnalysisScope.LEGAL_ONLY:
+        domain = "Legal"
+    elif state.analysis_scope == AnalysisScope.HR_ONLY:
+        domain = "HR"
+    elif state.analysis_scope == AnalysisScope.COMPLIANCE_ONLY:
+        domain = "Compliance"
+    else:
+        domain = "Analysis"
+    
+    # Get the analysis results
+    analysis_results = get_domain_analysis_text(state, domain.lower())
+    
+    prompt = DOMAIN_SUMMARY_PROMPT.format(
+        domain=domain.lower(),
+        domain_title=domain,
+        company_name=state.target.company_name if state.target else "Target Company",
+        analysis_results=analysis_results,
+    )
+    
+    try:
+        response = llm.invoke([SystemMessage(content=prompt)])
+        
+        return {
+            "messages": [response],
+            "execution_phase": "complete",
+            "current_phase": "complete",
+            "next_agent": "FINISH",
+        }
+    except Exception as e:
+        logger.error(f"Domain summarizer error: {e}")
+        return {
+            "messages": [AIMessage(content=f"Error summarizing analysis: {str(e)}")],
+            "next_agent": "FINISH",
+        }
+
+
+# =============================================================================
+# HELPER FUNCTIONS FOR NEW NODES
+# =============================================================================
+
+def estimate_risk_from_legacy(state: SupervisorState, agent_name: str) -> float:
+    """Estimate risk score from legacy result fields."""
+    if agent_name == "finance_agent" and state.finance_result:
+        return state.finance_result.risk_score.score if state.finance_result.risk_score else 0.5
+    elif agent_name == "legal_agent" and state.legal_result:
+        return state.legal_result.risk_score.score if state.legal_result.risk_score else 0.5
+    elif agent_name == "hr_agent" and state.hr_result:
+        return state.hr_result.risk_score.score if state.hr_result.risk_score else 0.5
+    return 0.5
+
+
+def identify_deal_breakers_from_outputs(state: SupervisorState) -> List[str]:
+    """Identify deal-breakers from agent outputs."""
+    deal_breakers = []
+    
+    for agent_name, output in state.agent_outputs.items():
+        if hasattr(output, 'red_flags') and output.red_flags:
+            for flag in output.red_flags:
+                if "deal breaker" in flag.lower() or "critical" in flag.lower():
+                    deal_breakers.append(flag)
+        
+        if hasattr(output, 'risk_factors'):
+            for rf in output.risk_factors:
+                if rf.is_deal_breaker:
+                    deal_breakers.append(rf.name)
+    
+    return deal_breakers
+
+
+def format_agent_outputs_for_prompt(state: SupervisorState) -> str:
+    """Format agent outputs for master analyst prompt."""
+    sections = []
+    
+    # Finance
+    if "finance_agent" in state.agents_completed:
+        if "finance_agent" in state.agent_outputs:
+            output = state.agent_outputs["finance_agent"]
+            sections.append(f"### Financial Analysis\n{output.summary}\nRisk Score: {output.risk_score}")
+        elif state.finance_result:
+            sections.append(f"### Financial Analysis\n{state.finance_result.summary}")
+        else:
+            sections.append("### Financial Analysis\nAnalysis completed.")
+    
+    # Legal
+    if "legal_agent" in state.agents_completed:
+        if "legal_agent" in state.agent_outputs:
+            output = state.agent_outputs["legal_agent"]
+            sections.append(f"### Legal Analysis\n{output.summary}\nRisk Score: {output.risk_score}")
+        elif state.legal_result:
+            sections.append(f"### Legal Analysis\n{state.legal_result.summary}")
+        else:
+            sections.append("### Legal Analysis\nAnalysis completed.")
+    
+    # HR
+    if "hr_agent" in state.agents_completed:
+        if "hr_agent" in state.agent_outputs:
+            output = state.agent_outputs["hr_agent"]
+            sections.append(f"### HR Analysis\n{output.summary}\nRisk Score: {output.risk_score}")
+        elif state.hr_result:
+            sections.append(f"### HR Analysis\n{state.hr_result.summary}")
+        else:
+            sections.append("### HR Analysis\nAnalysis completed.")
+    
+    # Include aggregated risk if available
+    if state.aggregated_risk:
+        sections.append(f"""
+### Aggregated Risk Assessment
+- Overall Risk Score: {state.aggregated_risk.overall_score:.2f}
+- Risk Level: {state.aggregated_risk.risk_level.value.upper()}
+- Deal Breakers: {', '.join(state.aggregated_risk.deal_breakers) if state.aggregated_risk.deal_breakers else 'None identified'}
+- Key Concerns: {', '.join(state.aggregated_risk.key_concerns) if state.aggregated_risk.key_concerns else 'None'}
+""")
+    
+    return "\n\n".join(sections) if sections else "No agent outputs available."
+
+
+def get_domain_analysis_text(state: SupervisorState, domain: str) -> str:
+    """Get analysis text for a specific domain."""
+    agent_name = f"{domain}_agent"
+    
+    if agent_name in state.agent_outputs:
+        output = state.agent_outputs[agent_name]
+        return f"""
+Summary: {output.summary}
+Risk Score: {output.risk_score}
+Key Findings: {', '.join(output.key_findings) if output.key_findings else 'N/A'}
+Red Flags: {', '.join(output.red_flags) if output.red_flags else 'None'}
+Recommendations: {', '.join(output.recommendations) if output.recommendations else 'N/A'}
+"""
+    
+    # Fallback to legacy
+    if domain == "financial" and state.finance_result:
+        return state.finance_result.summary
+    elif domain == "legal" and state.legal_result:
+        return state.legal_result.summary
+    elif domain == "hr" and state.hr_result:
+        return state.hr_result.summary
+    
+    return "Analysis results not available."
+
+
+def extract_executive_summary(content: str) -> str:
+    """Extract executive summary from master analyst response."""
+    # Try to find executive summary section
+    if "EXECUTIVE SUMMARY" in content.upper():
+        lines = content.split('\n')
+        summary_lines = []
+        in_summary = False
+        for line in lines:
+            if "EXECUTIVE SUMMARY" in line.upper():
+                in_summary = True
+                continue
+            if in_summary:
+                if line.startswith('###') or line.startswith('## '):
+                    break
+                summary_lines.append(line)
+        return '\n'.join(summary_lines).strip()[:500]
+    
+    # Fallback: first paragraph
+    paragraphs = content.split('\n\n')
+    return paragraphs[0][:500] if paragraphs else content[:500]
+
+
+def extract_reasoning_chain(content: str) -> List[ReasoningStep]:
+    """Extract reasoning chain from master analyst response."""
+    steps = []
+    # Simple extraction - look for numbered items with arrows
+    lines = content.split('\n')
+    step_num = 0
+    
+    for line in lines:
+        if '→' in line and (line.strip().startswith(str(step_num + 1)) or line.strip()[0].isdigit()):
+            step_num += 1
+            parts = line.split('→')
+            if len(parts) >= 2:
+                steps.append(ReasoningStep(
+                    step_number=step_num,
+                    analysis=parts[0].strip().lstrip('0123456789. '),
+                    finding=parts[1].strip() if len(parts) > 1 else "",
+                    implication=parts[2].strip() if len(parts) > 2 else "",
+                    confidence=0.8
+                ))
+    
+    return steps
+
+
+# =============================================================================
+# ROUTING FUNCTIONS FOR NEW NODES
+# =============================================================================
+
+def route_after_planning(state: SupervisorState) -> str:
+    """Route after analysis planning to first agent."""
+    if state.analysis_plan:
+        next_agents = get_next_agents(state.analysis_plan, [], [])
+        if next_agents:
+            return next_agents[0]
+    return "rag_agent"
+
+
+def route_after_domain_agents(state: SupervisorState) -> str:
+    """
+    Route after domain agents complete.
+    
+    Checks if all required domain agents are done, then routes to:
+    - risk_aggregator for full analysis
+    - domain_summarizer for single-domain analysis
+    """
+    plan = state.analysis_plan
+    
+    if not plan:
+        return "supervisor"  # Fallback to original flow
+    
+    # Check if plan is complete
+    if is_plan_complete(plan, state.agents_completed, state.agents_failed):
+        # Determine next step based on scope
+        if plan.analysis_scope == AnalysisScope.FULL_DUE_DILIGENCE:
+            return "risk_aggregator"
+        elif plan.analysis_scope in [
+            AnalysisScope.FINANCIAL_ONLY,
+            AnalysisScope.LEGAL_ONLY,
+            AnalysisScope.HR_ONLY,
+            AnalysisScope.COMPLIANCE_ONLY,
+        ]:
+            return "domain_summarizer"
+        else:
+            return "risk_aggregator"
+    
+    # More agents to run
+    next_agents = get_next_agents(plan, state.agents_completed, state.agents_failed)
+    if next_agents:
+        return next_agents[0]
+    
+    return "risk_aggregator"
+
+
+def route_after_risk_aggregation(state: SupervisorState) -> str:
+    """Route after risk aggregation to master analyst."""
+    return "master_analyst"
+
+
+# =============================================================================
+# END NEW NODES
 # =============================================================================
 
 
@@ -571,10 +1070,15 @@ def finance_agent_node(state: SupervisorState) -> dict:
         "target_company": state.target,
     })
     
+    # Update both legacy and new tracking
+    new_agents_completed = list(state.agents_completed) + ["finance_agent"]
+    
     return {
         "messages": result.get("messages", []),
         "agents_invoked": state.agents_invoked + ["finance_agent"],
+        "agents_completed": new_agents_completed,
         "current_phase": "legal_analysis",
+        "execution_phase": "domain_analysis",
     }
 
 
@@ -588,10 +1092,14 @@ def legal_agent_node(state: SupervisorState) -> dict:
         "target_company": state.target,
     })
     
+    new_agents_completed = list(state.agents_completed) + ["legal_agent"]
+    
     return {
         "messages": result.get("messages", []),
         "agents_invoked": state.agents_invoked + ["legal_agent"],
+        "agents_completed": new_agents_completed,
         "current_phase": "hr_analysis",
+        "execution_phase": "domain_analysis",
     }
 
 
@@ -606,10 +1114,14 @@ def hr_agent_node(state: SupervisorState) -> dict:
         "acquirer_company": state.acquirer,
     })
     
+    new_agents_completed = list(state.agents_completed) + ["hr_agent"]
+    
     return {
         "messages": result.get("messages", []),
         "agents_invoked": state.agents_invoked + ["hr_agent"],
+        "agents_completed": new_agents_completed,
         "current_phase": "strategic_analysis",
+        "execution_phase": "domain_analysis",
     }
 
 
@@ -629,10 +1141,14 @@ def analyst_agent_node(state: SupervisorState) -> dict:
         "risk_scores": risk_scores_list,
     })
     
+    new_agents_completed = list(state.agents_completed) + ["analyst_agent"]
+    
     return {
         "messages": result.get("messages", []),
         "agents_invoked": state.agents_invoked + ["analyst_agent"],
+        "agents_completed": new_agents_completed,
         "current_phase": "complete",
+        "execution_phase": "recommendation_generation",
     }
 
 
@@ -640,42 +1156,74 @@ def rag_agent_node(state: SupervisorState) -> dict:
     """Invoke the RAG agent for document retrieval."""
     log_agent_action(logger, "supervisor", "invoking_rag_agent", {})
     
+    # Convert CompanyInfo to dict for RAG agent compatibility
+    target_dict = state.target.model_dump() if state.target else None
+    
     result = rag_agent.invoke({
         "messages": state.messages,
-        "target_company": state.target,
+        "target_company": target_dict,
     })
+    
+    new_agents_completed = list(state.agents_completed) + ["rag_agent"]
     
     return {
         "messages": result.get("messages", []),
         "agents_invoked": state.agents_invoked + ["rag_agent"],
+        "agents_completed": new_agents_completed,
         "current_phase": "financial_analysis",
+        "execution_phase": "domain_analysis",
     }
 
 
 def human_review_node(state: SupervisorState) -> dict:
-    """Node for human-in-the-loop review."""
+    """
+    Node for human-in-the-loop review.
+    Uses LLM to generate contextual review request based on findings.
+    """
     log_agent_action(logger, "supervisor", "requesting_human_review", {
-        "reason": "High risk or critical decision required"
+        "reason": state.human_review_reason or "High risk or critical decision required"
     })
     
-    return {
-        "pending_human_review": True,
-        "messages": [AIMessage(content="""
-## Human Review Required
+    llm = get_llm(temperature=0.1)
+    
+    # Gather context for the review request
+    review_reason = state.human_review_reason or "High risk factors identified"
+    risk_level = state.overall_risk_level or "UNKNOWN"
+    
+    # Get recent findings
+    recent_findings = []
+    if state.agent_outputs:
+        for output in state.agent_outputs[-3:]:  # Last 3 outputs
+            if hasattr(output, 'key_findings'):
+                recent_findings.extend(output.key_findings[:2])
+    
+    prompt = f"""You are an M&A Due Diligence system requesting human oversight.
 
-This analysis requires human oversight before proceeding.
+Context:
+- Review Reason: {review_reason}
+- Current Risk Level: {risk_level}
+- Key Findings: {recent_findings[:5] if recent_findings else 'Analysis in progress'}
 
-**Reason**: High risk factors identified or critical decision point reached.
+Generate a professional, clear message requesting human review that:
+1. Explains why human oversight is needed
+2. Summarizes the key concerns requiring attention
+3. Presents clear options for the reviewer (approve, request more analysis, modify thresholds, reject)
+4. Maintains a professional tone suitable for M&A transactions
 
-Please review the findings and provide your feedback to continue.
-
-**Options**:
-1. Approve and continue with recommendations
-2. Request additional analysis
-3. Modify risk thresholds
-4. Reject and terminate analysis
-        """)],
-    }
+Format the response with clear headers and bullet points."""
+    
+    try:
+        response = llm.invoke([SystemMessage(content=prompt)])
+        return {
+            "pending_human_review": True,
+            "messages": [response],
+        }
+    except Exception as e:
+        logger.error(f"Error generating human review request: {e}")
+        return {
+            "pending_human_review": True,
+            "messages": [AIMessage(content=f"Human review required: {review_reason}. Please review the analysis and provide guidance.")],
+        }
 
 
 def route_to_agent(state: SupervisorState) -> str:
@@ -695,44 +1243,49 @@ def route_to_agent(state: SupervisorState) -> str:
 
 def build_supervisor_graph():
     """
-    Build the main supervisor graph that orchestrates all agents.
+    Build the enhanced supervisor graph that orchestrates all agents.
     
-    Graph Structure (Updated with Intent Classification):
+    ENHANCED Graph Structure (v2.0):
     
     START → intent_classifier → [route_after_intent]
                                        │
-                ┌──────────────────────┼──────────────────────┐
-                │                      │                      │
-                ▼                      ▼                      ▼
-         greeting_handler      ma_question_handler     supervisor
-         help_handler          informational_handler       │
-                │                      │            [route_to_agent]
-                │                      │                   │
-                ▼                      ▼         ┌─────────┴─────────┐
-               END                    END        │                   │
-                                           ┌─────┴─────┐       human_review
-                                           │  agents   │             │
-                                           └─────┬─────┘             ▼
-                                                 │                  END
-                                                 ▼
-                                            supervisor
-                                                 │
-                                                 ▼
-                                                END
+        ┌──────────────────────────────┼──────────────────────────────┐
+        │                              │                              │
+        ▼                              ▼                              ▼
+    greeting_handler            ma_question_handler           analysis_planner
+    help_handler                informational_handler               │
+        │                              │                              ▼
+        ▼                              ▼                      [domain agents]
+       END                            END                    finance, legal, hr
+                                                           (each calls RAG internally)
+                                                                      │
+                                                                      ▼
+                                                              risk_aggregator
+                                                                      │
+                                                                      ▼
+                                                              master_analyst
+                                                                      │
+                                                                      ▼
+                                                                     END
+    
+    For single-domain queries:
+    analysis_planner → [single domain agent] → domain_summarizer → END
+    
+    NOTE: Supervisor does NOT orchestrate RAG - each domain agent handles its own
+    RAG calls internally for data retrieval. This simplifies the flow and allows
+    agents to be more autonomous.
     
     The intent_classifier node runs first to:
     1. Classify user intent (GREETING, HELP, MA_QUESTION, MA_DUE_DILIGENCE, etc.)
-    2. Extract company names for M&A requests
-    3. Set chain_activated flag
-    
-    Only MA_DUE_DILIGENCE with company names routes to supervisor and triggers
-    the full agent chain. All other intents are handled by specialized handlers.
+    2. Detect analysis scope (FULL, FINANCIAL_ONLY, LEGAL_ONLY, etc.)
+    3. Extract company names for M&A requests
+    4. Set chain_activated flag
     """
     
     workflow = StateGraph(SupervisorState)
     
     # =========================================================================
-    # Add Intent Classification & Handler Nodes (Phase 5 & 6)
+    # PHASE 1: Intent Classification & Handler Nodes
     # =========================================================================
     workflow.add_node("intent_classifier", intent_classifier_node)
     workflow.add_node("greeting_handler", greeting_handler_node)
@@ -741,29 +1294,48 @@ def build_supervisor_graph():
     workflow.add_node("informational_handler", informational_handler_node)
     
     # =========================================================================
-    # Add Supervisor & Agent Nodes (existing)
+    # PHASE 2: Analysis Planning (NEW v2.0)
     # =========================================================================
-    workflow.add_node("supervisor", supervisor_node)
+    workflow.add_node("analysis_planner", analysis_planner_node)
+    
+    # =========================================================================
+    # PHASE 3: Domain Agents (each handles its own RAG calls internally)
+    # =========================================================================
     workflow.add_node("finance_agent", finance_agent_node)
     workflow.add_node("legal_agent", legal_agent_node)
     workflow.add_node("hr_agent", hr_agent_node)
     workflow.add_node("analyst_agent", analyst_agent_node)
+    
+    # Keep RAG node for legacy supervisor routing only
     workflow.add_node("rag_agent", rag_agent_node)
+    
+    # =========================================================================
+    # PHASE 4: Risk Aggregation & Master Analysis (NEW v2.0)
+    # =========================================================================
+    workflow.add_node("risk_aggregator", risk_aggregator_node)
+    workflow.add_node("master_analyst", master_analyst_node)
+    workflow.add_node("domain_summarizer", domain_summarizer_node)
+    
+    # =========================================================================
+    # PHASE 5: Legacy Supervisor & Human Review (backward compatibility)
+    # =========================================================================
+    workflow.add_node("supervisor", supervisor_node)
     workflow.add_node("human_review", human_review_node)
     
     # =========================================================================
-    # Set Entry Point to Intent Classifier (NEW - Phase 6)
+    # Set Entry Point to Intent Classifier
     # =========================================================================
     workflow.set_entry_point("intent_classifier")
     
     # =========================================================================
-    # Route from Intent Classifier based on Intent (NEW - Phase 6)
+    # Route from Intent Classifier based on Intent
     # =========================================================================
     workflow.add_conditional_edges(
         "intent_classifier",
         route_after_intent,
         {
-            "supervisor": "supervisor",
+            "analysis_planner": "analysis_planner",  # NEW: goes to planner first
+            "supervisor": "supervisor",  # Legacy fallback
             "greeting_handler": "greeting_handler",
             "help_handler": "help_handler",
             "ma_question_handler": "ma_question_handler",
@@ -772,7 +1344,7 @@ def build_supervisor_graph():
     )
     
     # =========================================================================
-    # Handler Nodes go directly to END (NEW - Phase 6)
+    # Handler Nodes go directly to END
     # =========================================================================
     workflow.add_edge("greeting_handler", END)
     workflow.add_edge("help_handler", END)
@@ -780,7 +1352,72 @@ def build_supervisor_graph():
     workflow.add_edge("informational_handler", END)
     
     # =========================================================================
-    # Existing Routing from Supervisor (unchanged)
+    # Analysis Planner routes directly to first domain agent
+    # =========================================================================
+    workflow.add_conditional_edges(
+        "analysis_planner",
+        route_after_planning,
+        {
+            "finance_agent": "finance_agent",
+            "legal_agent": "legal_agent",
+            "hr_agent": "hr_agent",
+            "analyst_agent": "analyst_agent",
+            "supervisor": "supervisor",  # Fallback
+        }
+    )
+    
+    # =========================================================================
+    # Domain Agents route to next agent or aggregation
+    # =========================================================================
+    workflow.add_conditional_edges(
+        "finance_agent",
+        route_after_domain_agent,
+        {
+            "legal_agent": "legal_agent",
+            "hr_agent": "hr_agent",
+            "risk_aggregator": "risk_aggregator",
+            "domain_summarizer": "domain_summarizer",
+            "supervisor": "supervisor",
+        }
+    )
+    
+    workflow.add_conditional_edges(
+        "legal_agent",
+        route_after_domain_agent,
+        {
+            "finance_agent": "finance_agent",
+            "hr_agent": "hr_agent",
+            "risk_aggregator": "risk_aggregator",
+            "domain_summarizer": "domain_summarizer",
+            "supervisor": "supervisor",
+        }
+    )
+    
+    workflow.add_conditional_edges(
+        "hr_agent",
+        route_after_domain_agent,
+        {
+            "finance_agent": "finance_agent",
+            "legal_agent": "legal_agent",
+            "risk_aggregator": "risk_aggregator",
+            "domain_summarizer": "domain_summarizer",
+            "supervisor": "supervisor",
+        }
+    )
+    
+    # =========================================================================
+    # Risk Aggregator routes to Master Analyst
+    # =========================================================================
+    workflow.add_edge("risk_aggregator", "master_analyst")
+    
+    # =========================================================================
+    # Master Analyst and Domain Summarizer route to END
+    # =========================================================================
+    workflow.add_edge("master_analyst", END)
+    workflow.add_edge("domain_summarizer", END)
+    
+    # =========================================================================
+    # Legacy Supervisor routing (backward compatibility)
     # =========================================================================
     workflow.add_conditional_edges(
         "supervisor",
@@ -791,20 +1428,83 @@ def build_supervisor_graph():
             "hr_agent": "hr_agent",
             "analyst_agent": "analyst_agent",
             "rag_agent": "rag_agent",
+            "risk_aggregator": "risk_aggregator",
+            "master_analyst": "master_analyst",
             "human_review": "human_review",
             "supervisor": "supervisor",
             "end": END,
         }
     )
     
-    # All agents route back to supervisor
-    for agent_name in ["finance_agent", "legal_agent", "hr_agent", "analyst_agent", "rag_agent"]:
-        workflow.add_edge(agent_name, "supervisor")
+    # Analyst agent routes to supervisor (legacy) or risk_aggregator (new)
+    workflow.add_conditional_edges(
+        "analyst_agent",
+        lambda s: "risk_aggregator" if s.analysis_plan else "supervisor",
+        {
+            "risk_aggregator": "risk_aggregator",
+            "supervisor": "supervisor",
+        }
+    )
+    
+    # RAG agent routes back to supervisor (legacy mode only)
+    workflow.add_edge("rag_agent", "supervisor")
     
     # Human review goes to END
     workflow.add_edge("human_review", END)
     
     return workflow.compile()
+
+
+# =========================================================================
+# NEW ROUTING FUNCTIONS
+# =========================================================================
+
+def route_after_planning(state: SupervisorState) -> str:
+    """Route after analysis planning to first domain agent."""
+    plan = state.analysis_plan
+    
+    if not plan:
+        return "supervisor"
+    
+    # Get first agents from the plan
+    next_agents = get_next_agents(plan, state.agents_completed, state.agents_failed)
+    
+    if next_agents:
+        # Return the first domain agent
+        for agent in next_agents:
+            if agent in ["finance_agent", "legal_agent", "hr_agent", "analyst_agent"]:
+                return agent
+    
+    return "supervisor"
+
+
+def route_after_domain_agent(state: SupervisorState) -> str:
+    """Route after a domain agent completes."""
+    plan = state.analysis_plan
+    
+    if not plan:
+        return "supervisor"
+    
+    # Check what's next in the plan
+    next_agents = get_next_agents(plan, state.agents_completed, state.agents_failed)
+    
+    if next_agents:
+        # Return next domain agent if available
+        for agent in next_agents:
+            if agent in ["finance_agent", "legal_agent", "hr_agent"]:
+                return agent
+    
+    # All domain agents done - check scope
+    if plan.analysis_scope in [
+        AnalysisScope.FINANCIAL_ONLY,
+        AnalysisScope.LEGAL_ONLY,
+        AnalysisScope.HR_ONLY,
+        AnalysisScope.COMPLIANCE_ONLY,
+    ]:
+        return "domain_summarizer"
+    
+    # Full analysis - go to risk aggregation
+    return "risk_aggregator"
 
 
 # Export the compiled graph for langgraph.json
