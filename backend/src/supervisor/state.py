@@ -229,5 +229,13 @@ class SupervisorState(BaseAgentState):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     
+    # ==========================================================================
+    # CONSOLIDATED OUTPUT (NEW - for frontend)
+    # ==========================================================================
+    consolidated_result: Optional[Dict] = Field(
+        default=None,
+        description="Consolidated result from all agents with scoring table and color coding"
+    )
+    
     class Config:
         arbitrary_types_allowed = True

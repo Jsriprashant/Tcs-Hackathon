@@ -1,0 +1,209 @@
+{
+  "company": {
+    "id": "BBD",
+    "name": "BBD Software Com Ltd"
+  },
+  "overall": {
+    "company_id": "BBD",
+    "company_name": "BBD Software Com Ltd",
+    "overall_health_score": 54,
+    "overall_risk_score": 0.45,
+    "recommendation": "CONDITIONAL",
+    "recommendation_color": "yellow",
+    "domains_analyzed": 2
+  },
+  "scoring_table": [
+    {
+      "domain": "Financial",
+      "agent": "finance_agent",
+      "score": 50,
+      "max_score": 100,
+      "risk_score": 0.5,
+      "status": "MODERATE",
+      "color": "yellow",
+      "key_findings": [],
+      "confidence": 0.8
+    },
+    {
+      "domain": "Legal",
+      "agent": "legal_agent",
+      "score": 60,
+      "max_score": 100,
+      "risk_score": 0.4,
+      "status": "HIGH RISK",
+      "color": "yellow",
+      "key_findings": [
+        "[HIGH] Undisclosed GDPR Fine",
+        "[HIGH] Undisclosed GDPR Fine",
+        "[HIGH] Abandoned Patent"
+      ],
+      "confidence": 0.85
+    }
+  ],
+  "domain_details": {
+    "finance": {
+      "agent_name": "finance_agent",
+      "domain": "finance",
+      "summary": "TCS Financial Score: 50/100 (Estimated)\n\nKey Ratios:\n- Gross Margin: N/A%\n- Net Margin: N/A%\n- Current Ratio: N/A\n- Debt/Equity: N/A\n- ROE: N/A%\n\nRed Flags: None identified",
+      "findings": [],
+      "key_findings": [],
+      "risk_score": 0.5,
+      "risk_level": "medium",
+      "risk_factors": [],
+      "recommendations": [],
+      "red_flags": [],
+      "positive_factors": [],
+      "confidence": 0.8,
+      "data_quality": "medium",
+      "documents_analyzed": [],
+      "timestamp": "2025-12-06 08:42:42.747116",
+      "raw_response": null
+    },
+    "legal": {
+      "agent_name": "legal_agent",
+      "domain": "legal",
+      "summary": "Legal Due Diligence Score: 60/100 (HIGH)\n\nCategory Scores:\n- Litigation: 27/35\n- Contracts: 27/35\n- IP Portfolio: 6/30\n\nTotal Findings: 5\nDeal Breakers: 0",
+      "findings": [
+        {
+          "category": "litigation",
+          "title": "Undisclosed GDPR Fine",
+          "description": "BBD Software Com Ltd incurred a \u20ac7.5 million fine for a data breach affecting 1.2 million EU customers, with a delayed notification violating the 72-hour rule. The fine has been paid, but it was not disclosed in the financial statements, raising concerns about undisclosed liabilities.",
+          "severity": "high",
+          "impact": "Ensure full disclosure of the fine in financial statements and assess potential impacts on future financial reporting.",
+          "data_points": [
+            "Potential liability: $8,000,000"
+          ],
+          "source": "bbd_gdpr.md"
+        },
+        {
+          "category": "contracts",
+          "title": "Undisclosed GDPR Fine",
+          "description": "BBD Software Com Ltd has a paid GDPR fine of \u20ac7.5 million due to a data breach affecting 1.2 million EU customers. The fine was not disclosed in financial statements, which poses a significant risk to the company's financial integrity and could affect investor confidence.",
+          "severity": "high",
+          "impact": "Ensure full disclosure of the fine in financial statements and assess potential impacts on future financial reporting.",
+          "data_points": [
+            "Potential liability: $7,500,000"
+          ],
+          "source": "bbd_gdpr.md"
+        },
+        {
+          "category": "ip",
+          "title": "Abandoned Patent",
+          "description": "The patent IN202221045678 for a real-time fraud detection engine has been abandoned due to non-payment of maintenance fees in 2024, which poses a risk of losing potential IP protection.",
+          "severity": "high",
+          "impact": "Consider re-filing if possible and ensure timely payment of maintenance fees for future patents.",
+          "data_points": [
+            "Liability: Unknown"
+          ],
+          "source": "patent.md"
+        },
+        {
+          "category": "ip",
+          "title": "Lapsed Trademark",
+          "description": "The trademark for 'BBD PayShield' is due for renewal in October 2024 but has lapsed, risking loss of brand protection and potential infringement by competitors.",
+          "severity": "high",
+          "impact": "Initiate renewal process immediately to restore trademark protection.",
+          "data_points": [
+            "Liability: Unknown"
+          ],
+          "source": "patent.md"
+        },
+        {
+          "category": "ip",
+          "title": "GPL-3.0 Compliance Risk",
+          "description": "The core payment module uses a GPL-3.0 library without a compliance audit, which may expose the company to risks of copyleft contamination in proprietary software.",
+          "severity": "high",
+          "impact": "Conduct a compliance audit and assess the impact of GPL-3.0 on proprietary code.",
+          "data_points": [
+            "Liability: Unknown"
+          ],
+          "source": "patent.md"
+        }
+      ],
+      "key_findings": [
+        "[HIGH] Undisclosed GDPR Fine",
+        "[HIGH] Undisclosed GDPR Fine",
+        "[HIGH] Abandoned Patent",
+        "[HIGH] Lapsed Trademark",
+        "[HIGH] GPL-3.0 Compliance Risk"
+      ],
+      "risk_score": 0.4,
+      "risk_level": "high",
+      "risk_factors": [
+        {
+          "factor_id": "legal_1",
+          "name": "Undisclosed GDPR Fine",
+          "description": "BBD Software Com Ltd incurred a \u20ac7.5 million fine for a data breach affecting 1.2 million EU customers, with a delayed notification violating the 72-hour rule. The fine has been paid, but it was not disclosed in the financial statements, raising concerns about undisclosed liabilities.",
+          "severity": "high",
+          "probability": 0.7,
+          "impact_score": 0.8,
+          "is_deal_breaker": false,
+          "mitigation": "Ensure full disclosure of the fine in financial statements and assess potential impacts on future financial reporting."
+        },
+        {
+          "factor_id": "legal_2",
+          "name": "Undisclosed GDPR Fine",
+          "description": "BBD Software Com Ltd has a paid GDPR fine of \u20ac7.5 million due to a data breach affecting 1.2 million EU customers. The fine was not disclosed in financial statements, which poses a significant risk to the company's financial integrity and could affect investor confidence.",
+          "severity": "high",
+          "probability": 0.7,
+          "impact_score": 0.8,
+          "is_deal_breaker": false,
+          "mitigation": "Ensure full disclosure of the fine in financial statements and assess potential impacts on future financial reporting."
+        },
+        {
+          "factor_id": "legal_3",
+          "name": "Abandoned Patent",
+          "description": "The patent IN202221045678 for a real-time fraud detection engine has been abandoned due to non-payment of maintenance fees in 2024, which poses a risk of losing potential IP protection.",
+          "severity": "high",
+          "probability": 0.7,
+          "impact_score": 0.8,
+          "is_deal_breaker": false,
+          "mitigation": "Consider re-filing if possible and ensure timely payment of maintenance fees for future patents."
+        },
+        {
+          "factor_id": "legal_4",
+          "name": "Lapsed Trademark",
+          "description": "The trademark for 'BBD PayShield' is due for renewal in October 2024 but has lapsed, risking loss of brand protection and potential infringement by competitors.",
+          "severity": "high",
+          "probability": 0.7,
+          "impact_score": 0.8,
+          "is_deal_breaker": false,
+          "mitigation": "Initiate renewal process immediately to restore trademark protection."
+        },
+        {
+          "factor_id": "legal_5",
+          "name": "GPL-3.0 Compliance Risk",
+          "description": "The core payment module uses a GPL-3.0 library without a compliance audit, which may expose the company to risks of copyleft contamination in proprietary software.",
+          "severity": "high",
+          "probability": 0.7,
+          "impact_score": 0.8,
+          "is_deal_breaker": false,
+          "mitigation": "Conduct a compliance audit and assess the impact of GPL-3.0 on proprietary code."
+        }
+      ],
+      "recommendations": [
+        "Ensure full disclosure of the fine in financial statements and assess potential impacts on future financial reporting.",
+        "Ensure full disclosure of the fine in financial statements and assess potential impacts on future financial reporting.",
+        "Consider re-filing if possible and ensure timely payment of maintenance fees for future patents.",
+        "Initiate renewal process immediately to restore trademark protection.",
+        "Conduct a compliance audit and assess the impact of GPL-3.0 on proprietary code."
+      ],
+      "red_flags": [
+        "Undisclosed GDPR Fine",
+        "Undisclosed GDPR Fine",
+        "Abandoned Patent",
+        "Lapsed Trademark",
+        "GPL-3.0 Compliance Risk"
+      ],
+      "positive_factors": [
+        "No deal breakers identified"
+      ],
+      "confidence": 0.85,
+      "data_quality": "high",
+      "documents_analyzed": [],
+      "timestamp": "2025-12-06 08:42:17.187749",
+      "raw_response": "\n# Legal Due Diligence Report: BBD Software Com Ltd\n\n## Executive Summary\n- **Company:** BBD Software Com Ltd (BBD)\n- **Total Score:** 60/100\n- **Risk Level:** HIGH\n- **Confidence:** 85%\n\n## Category Breakdown\n\n| Category | Score | Max | Status |\n|----------|-------|-----|--------|\n| Litigation Exposure | 27 | 35 | OK |\n| Contract Risk | 27 | 35 | OK |\n| IP Portfolio | 6 | 30 | HIGH RISK |\n\n## Key Findings (5 total)\n\n  [!] [HIGH] Undisclosed GDPR Fine\n  [!] [HIGH] Undisclosed GDPR Fine\n  [!] [HIGH] Abandoned Patent\n  [!] [HIGH] Lapsed Trademark\n  [!] [HIGH] GPL-3.0 Compliance Risk\n\n## Deal Breakers\n\n  None identified\n\n## Recommendation\n\nSignificant negotiation required before proceeding. Consider escrow provisions.\n\n---\n*Report generated by Legal Due Diligence Agent (MVP)*\n*Analysis based on 5 identified issues across 3 categories*\n"
+    },
+    "hr": null
+  }
+}

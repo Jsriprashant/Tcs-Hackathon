@@ -77,6 +77,15 @@ from src.hr_agent.graph import hr_agent
 from src.analyst_agent.graph import analyst_agent
 from src.rag_agent.graph import rag_agent
 
+# Import parsers for agent I/O transformation
+from src.supervisor.parsers import (
+    create_legal_agent_input,
+    parse_legal_agent_output,
+    create_finance_agent_input,
+    parse_finance_agent_output,
+    ConsolidatedResult,
+)
+
 logger = get_logger(__name__)
 
 # Agent mapping
@@ -524,11 +533,33 @@ def risk_aggregator_node(state: SupervisorState) -> dict:
         "deal_breakers_count": len(deal_breakers),
     })
     
+    # Generate consolidated result for frontend
+    consolidated_result = None
+    if state.target:
+        finance_output = state.agent_outputs.get("finance_agent")
+        legal_output = state.agent_outputs.get("legal_agent")
+        hr_output = state.agent_outputs.get("hr_agent")
+        
+        consolidated = ConsolidatedResult(
+            company_id=state.target.company_id,
+            company_name=state.target.company_name,
+            finance_output=finance_output,
+            legal_output=legal_output,
+            hr_output=hr_output,
+        )
+        consolidated_result = consolidated.to_dict()
+        
+        log_agent_action(logger, "risk_aggregator", "consolidated_result_generated", {
+            "overall_health_score": consolidated_result["overall"]["overall_health_score"],
+            "recommendation": consolidated_result["overall"]["recommendation"],
+        })
+    
     return {
         "domain_risk_scores": domain_risk_scores,
         "aggregated_risk": aggregated_risk,
         "overall_risk_score": aggregated_risk.overall_score,
         "overall_risk_level": aggregated_risk.risk_level,
+        "consolidated_result": consolidated_result,
         "execution_phase": "recommendation_generation",
     }
 
@@ -1060,47 +1091,129 @@ def determine_default_routing(state: SupervisorState) -> dict:
 
 
 def finance_agent_node(state: SupervisorState) -> dict:
-    """Invoke the finance agent."""
-    log_agent_action(logger, "supervisor", "invoking_finance_agent", {})
+    """
+    Invoke the finance agent with proper input/output transformation.
     
-    # Pass relevant state to finance agent
-    result = finance_agent.invoke({
-        "messages": state.messages,
-        "deal_type": state.deal_type,
-        "target_company": state.target,
+    Uses parsers to:
+    1. Transform supervisor state → finance agent input format
+    2. Parse finance agent output → AgentOutput model
+    """
+    log_agent_action(logger, "supervisor", "invoking_finance_agent", {
+        "target": state.target.company_name if state.target else None,
     })
     
-    # Update both legacy and new tracking
-    new_agents_completed = list(state.agents_completed) + ["finance_agent"]
-    
-    return {
-        "messages": result.get("messages", []),
-        "agents_invoked": state.agents_invoked + ["finance_agent"],
-        "agents_completed": new_agents_completed,
-        "current_phase": "legal_analysis",
-        "execution_phase": "domain_analysis",
-    }
+    try:
+        # Create properly formatted input using parser
+        agent_input = create_finance_agent_input(state)
+        
+        # Invoke finance agent
+        result = finance_agent.invoke(agent_input)
+        
+        # Parse output into structured AgentOutput
+        agent_output = parse_finance_agent_output(result)
+        
+        # Update agent_outputs dict
+        new_agent_outputs = dict(state.agent_outputs)
+        new_agent_outputs["finance_agent"] = agent_output
+        
+        log_agent_action(logger, "supervisor", "finance_agent_complete", {
+            "risk_score": agent_output.risk_score,
+            "risk_level": agent_output.risk_level.value,
+        })
+        
+        # Update both legacy and new tracking
+        new_agents_completed = list(state.agents_completed) + ["finance_agent"]
+        
+        return {
+            "messages": result.get("messages", []),
+            "agents_invoked": state.agents_invoked + ["finance_agent"],
+            "agents_completed": new_agents_completed,
+            "agent_outputs": new_agent_outputs,
+            "current_phase": "legal_analysis",
+            "execution_phase": "domain_analysis",
+        }
+        
+    except ValueError as e:
+        logger.error(f"Finance agent input error: {e}")
+        return {
+            "messages": [AIMessage(content=f"Finance analysis skipped: {str(e)}")],
+            "agents_invoked": state.agents_invoked + ["finance_agent"],
+            "agents_completed": list(state.agents_completed) + ["finance_agent"],
+            "current_phase": "legal_analysis",
+            "execution_phase": "domain_analysis",
+        }
+    except Exception as e:
+        logger.error(f"Finance agent error: {e}")
+        return {
+            "messages": [AIMessage(content=f"Finance analysis encountered an error: {str(e)}")],
+            "agents_invoked": state.agents_invoked + ["finance_agent"],
+            "agents_completed": list(state.agents_completed) + ["finance_agent"],
+            "current_phase": "legal_analysis",
+            "execution_phase": "domain_analysis",
+        }
 
 
 def legal_agent_node(state: SupervisorState) -> dict:
-    """Invoke the legal agent."""
-    log_agent_action(logger, "supervisor", "invoking_legal_agent", {})
+    """
+    Invoke the legal agent with proper input/output transformation.
     
-    result = legal_agent.invoke({
-        "messages": state.messages,
-        "deal_type": state.deal_type,
-        "target_company": state.target,
+    Uses parsers to:
+    1. Transform supervisor state → legal agent input format (company_id)
+    2. Parse legal agent output → AgentOutput model
+    """
+    log_agent_action(logger, "supervisor", "invoking_legal_agent", {
+        "target": state.target.company_name if state.target else None,
     })
     
-    new_agents_completed = list(state.agents_completed) + ["legal_agent"]
-    
-    return {
-        "messages": result.get("messages", []),
-        "agents_invoked": state.agents_invoked + ["legal_agent"],
-        "agents_completed": new_agents_completed,
-        "current_phase": "hr_analysis",
-        "execution_phase": "domain_analysis",
-    }
+    try:
+        # Create properly formatted input using parser
+        agent_input = create_legal_agent_input(state)
+        
+        # Invoke legal agent
+        result = legal_agent.invoke(agent_input)
+        
+        # Parse output into structured AgentOutput
+        agent_output = parse_legal_agent_output(result)
+        
+        # Update agent_outputs dict
+        new_agent_outputs = dict(state.agent_outputs)
+        new_agent_outputs["legal_agent"] = agent_output
+        
+        log_agent_action(logger, "supervisor", "legal_agent_complete", {
+            "risk_score": agent_output.risk_score,
+            "risk_level": agent_output.risk_level.value,
+            "findings_count": len(agent_output.findings),
+        })
+        
+        new_agents_completed = list(state.agents_completed) + ["legal_agent"]
+        
+        return {
+            "messages": result.get("messages", []),
+            "agents_invoked": state.agents_invoked + ["legal_agent"],
+            "agents_completed": new_agents_completed,
+            "agent_outputs": new_agent_outputs,
+            "current_phase": "hr_analysis",
+            "execution_phase": "domain_analysis",
+        }
+        
+    except ValueError as e:
+        logger.error(f"Legal agent input error: {e}")
+        return {
+            "messages": [AIMessage(content=f"Legal analysis skipped: {str(e)}")],
+            "agents_invoked": state.agents_invoked + ["legal_agent"],
+            "agents_completed": list(state.agents_completed) + ["legal_agent"],
+            "current_phase": "hr_analysis",
+            "execution_phase": "domain_analysis",
+        }
+    except Exception as e:
+        logger.error(f"Legal agent error: {e}")
+        return {
+            "messages": [AIMessage(content=f"Legal analysis encountered an error: {str(e)}")],
+            "agents_invoked": state.agents_invoked + ["legal_agent"],
+            "agents_completed": list(state.agents_completed) + ["legal_agent"],
+            "current_phase": "hr_analysis",
+            "execution_phase": "domain_analysis",
+        }
 
 
 def hr_agent_node(state: SupervisorState) -> dict:

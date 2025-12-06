@@ -88,7 +88,42 @@ def retrieve_financial_documents(
         
         search_query = f"{normalized_id} {query}".strip() if query else f"{normalized_id} financial data"
         
-        # Try with company filter first
+        # PRIORITY 1: Retrieve COMPLETE financial documents first
+        # These contain all metrics needed for ratio calculations
+        complete_docs = []
+        try:
+            complete_docs = vectorstore.similarity_search(
+                f"{normalized_id} complete financial data",
+                k=10,  # Get all complete docs for this company
+                filter={
+                    "$and": [
+                        {"company_id": normalized_id},
+                        {"data_complete": True}
+                    ]
+                }
+            )
+            logger.info(f"Retrieved {len(complete_docs)} complete financial documents for {normalized_id}")
+        except Exception as e:
+            logger.warning(f"Could not filter by data_complete, trying alternative: {e}")
+            # Some ChromaDB versions don't support $and, try without
+            all_docs = vectorstore.similarity_search(
+                f"{normalized_id} complete financial data",
+                k=20,
+                filter={"company_id": normalized_id}
+            )
+            complete_docs = [d for d in all_docs if d.metadata.get("data_complete") == True]
+        
+        # PRIORITY 2: If complete docs found, use them as primary source
+        if complete_docs:
+            result = f"## Complete Financial Documents for {normalized_id}\n\n"
+            for i, doc in enumerate(complete_docs, 1):
+                result += f"### {doc.metadata.get('doc_type', 'Financial Statement').replace('_', ' ').title()}\n"
+                result += f"**Source:** {doc.metadata.get('filename', 'Unknown')}\n"
+                result += f"**Records:** {doc.metadata.get('record_count', 'N/A')}\n\n"
+                result += f"{doc.page_content}\n\n---\n\n"
+            return result
+        
+        # PRIORITY 3: Fall back to regular search if no complete docs
         docs = vectorstore.similarity_search(
             search_query,
             k=k,
