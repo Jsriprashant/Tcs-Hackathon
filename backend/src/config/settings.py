@@ -1,4 +1,3 @@
-# filepath: c:\Users\GenAIBLRANCUSR23\Desktop\Hackathon\backend\src\config\settings.py
 """Application settings loaded from environment variables."""
 
 from functools import lru_cache
@@ -8,6 +7,24 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# =============================================================================
+# Compute absolute path to .env file
+# =============================================================================
+# settings.py is at: backend/src/config/settings.py
+# We need to find: backend/.env
+
+_THIS_FILE = Path(__file__).resolve()
+_CONFIG_DIR = _THIS_FILE.parent          # backend/src/config/
+_SRC_DIR = _CONFIG_DIR.parent            # backend/src/
+BACKEND_DIR = _SRC_DIR.parent            # backend/
+ENV_FILE_PATH = BACKEND_DIR / ".env"     # backend/.env
+
+# Load .env explicitly using python-dotenv (primary mechanism)
+# This ensures environment variables are set BEFORE Settings() is instantiated
+if ENV_FILE_PATH.exists():
+    from dotenv import load_dotenv
+    load_dotenv(ENV_FILE_PATH, override=True)
+
 
 class Settings(BaseSettings):
     """
@@ -15,10 +32,14 @@ class Settings(BaseSettings):
     
     Uses pydantic-settings to automatically load and validate
     environment variables from .env file.
+    
+    Environment Loading Strategy:
+    1. python-dotenv loads .env at module import time (primary)
+    2. pydantic-settings uses absolute env_file path (fallback)
     """
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(ENV_FILE_PATH),  # Use absolute path
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -273,3 +294,27 @@ def get_settings() -> Settings:
         Settings: Configured application settings
     """
     return Settings()
+
+
+def reset_settings() -> None:
+    """Clear the settings cache to force reload."""
+    get_settings.cache_clear()
+
+
+def validate_settings(settings: Settings) -> bool:
+    """
+    Validate that critical settings are loaded.
+    
+    Returns:
+        bool: True if settings are valid
+        
+    Raises:
+        ValueError: If critical settings are missing
+    """
+    if not settings.tcs_genai_api_key:
+        raise ValueError(
+            f"TCS_GENAI_API_KEY not loaded. "
+            f"Expected .env at: {ENV_FILE_PATH} "
+            f"(exists: {ENV_FILE_PATH.exists()})"
+        )
+    return True
