@@ -177,11 +177,17 @@ def intent_classifier_node(state: SupervisorState) -> dict:
                 company_name=enhanced_result.target_company,
                 industry="Unknown"  # Will be populated by RAG agent
             )
+            # Also set as active context for follow-up queries
+            updates["active_company_context"] = enhanced_result.target_company
             logger.info(f"Set target company: {enhanced_result.target_company}")
         
         # Set deal type
         if enhanced_result.deal_type:
             updates["deal_type"] = enhanced_result.deal_type.value
+        
+        # Track domains for session context
+        if enhanced_result.required_domains:
+            updates["last_analyzed_domains"] = enhanced_result.required_domains
     
     logger.info(
         f"Enhanced intent classification complete: {enhanced_result.intent}, "
@@ -200,6 +206,7 @@ def route_after_intent(state: SupervisorState) -> str:
     the next node in the graph based on the classified intent.
     
     ENHANCED: Routes to analysis_planner for MA_DUE_DILIGENCE before supervisor.
+    NEW: Routes to clarification_handler for DOMAIN_QUERY_NO_CONTEXT.
     
     Args:
         state: Current supervisor state with intent classification
@@ -213,12 +220,27 @@ def route_after_intent(state: SupervisorState) -> str:
         "intent": intent,
         "chain_activated": state.chain_activated,
         "analysis_scope": state.analysis_scope.value if state.analysis_scope else None,
+        "active_company_context": state.active_company_context,
     })
     
     # MA_DUE_DILIGENCE with companies -> go to analysis planner first
     if intent == "MA_DUE_DILIGENCE" and state.chain_activated:
         logger.info("Routing to analysis_planner for execution planning")
         return "analysis_planner"
+    
+    # DOMAIN_QUERY_NO_CONTEXT -> needs clarification (or use session context)
+    elif intent == "DOMAIN_QUERY_NO_CONTEXT":
+        logger.info("Routing to clarification_handler for company context")
+        return "clarification_handler"
+    
+    # FOLLOW_UP -> check session context and route accordingly
+    elif intent == "FOLLOW_UP":
+        if state.active_company_context:
+            logger.info(f"Follow-up with context: {state.active_company_context}, routing to clarification")
+            return "clarification_handler"
+        else:
+            logger.info("Follow-up without context, routing to clarification")
+            return "clarification_handler"
     
     # MA_QUESTION -> answer M&A question directly (no chain)
     elif intent == "MA_QUESTION":
@@ -311,12 +333,97 @@ def ma_question_handler_node(state: SupervisorState) -> dict:
     This node answers conceptual questions about M&A, due diligence,
     synergies, etc. without invoking the full agent chain.
     Uses LLM to provide educational, contextual responses.
+    
+    ENHANCED: Now checks if query actually contains a company name that was
+    missed during classification. If so, redirects to proper analysis.
     """
-    log_agent_action(logger, "ma_question_handler", "handling_ma_question", {})
+    log_agent_action(logger, "ma_question_handler", "handling_ma_question", {
+        "active_company_context": state.active_company_context,
+    })
     
+    last_message = get_last_human_message(state.messages) or ""
+    
+    # ENHANCED: Check if this query actually mentions a company name
+    # that should trigger analysis instead of a generic answer
+    from src.common.intent_classifier import extract_potential_company_names, has_domain_keywords
+    potential_companies = extract_potential_company_names(last_message)
+    has_domains, matched_domains = has_domain_keywords(last_message)
+    
+    # If we found a company name AND domain keywords, this should be analysis, not Q&A
+    if potential_companies and matched_domains:
+        company_name = potential_companies[0]
+        logger.info(f"MA_QUESTION handler detected company '{company_name}' with domains {matched_domains} - redirecting to analysis")
+        
+        # Determine scope based on domains
+        if len(matched_domains) == 1:
+            domain = matched_domains[0]
+            scope_map = {
+                "finance": AnalysisScope.FINANCIAL_ONLY,
+                "legal": AnalysisScope.LEGAL_ONLY,
+                "hr": AnalysisScope.HR_ONLY,
+                "compliance": AnalysisScope.COMPLIANCE_ONLY,
+                "strategic": AnalysisScope.STRATEGIC_ONLY,
+            }
+            analysis_scope = scope_map.get(domain, AnalysisScope.FULL_DUE_DILIGENCE)
+        else:
+            analysis_scope = AnalysisScope.FULL_DUE_DILIGENCE
+        
+        # Create focused query
+        focused_query = create_focused_query(last_message, matched_domains)
+        
+        return {
+            "messages": [AIMessage(content=f"I'll analyze {company_name}'s {', '.join(matched_domains)} data for you...")],
+            "chain_activated": True,
+            "intent_type": "MA_DUE_DILIGENCE",
+            "analysis_scope": analysis_scope,
+            "required_domains": matched_domains,
+            "focused_query": focused_query,
+            "target": CompanyInfo(
+                company_id=company_name.lower().replace(" ", "_"),
+                company_name=company_name,
+                industry="Unknown"
+            ),
+            "active_company_context": company_name,
+            "next_agent": "analysis_planner",
+        }
+    
+    # Check if there's active company context and domains - also redirect to analysis
+    if state.active_company_context and matched_domains:
+        logger.info(f"MA_QUESTION handler using context '{state.active_company_context}' with domains {matched_domains}")
+        
+        # Determine scope based on domains
+        if len(matched_domains) == 1:
+            domain = matched_domains[0]
+            scope_map = {
+                "finance": AnalysisScope.FINANCIAL_ONLY,
+                "legal": AnalysisScope.LEGAL_ONLY,
+                "hr": AnalysisScope.HR_ONLY,
+                "compliance": AnalysisScope.COMPLIANCE_ONLY,
+                "strategic": AnalysisScope.STRATEGIC_ONLY,
+            }
+            analysis_scope = scope_map.get(domain, AnalysisScope.FULL_DUE_DILIGENCE)
+        else:
+            analysis_scope = AnalysisScope.FULL_DUE_DILIGENCE
+        
+        focused_query = create_focused_query(last_message, matched_domains)
+        
+        return {
+            "messages": [AIMessage(content=f"I'll analyze {state.active_company_context}'s {', '.join(matched_domains)} data...")],
+            "chain_activated": True,
+            "intent_type": "MA_DUE_DILIGENCE",
+            "analysis_scope": analysis_scope,
+            "required_domains": matched_domains,
+            "focused_query": focused_query,
+            "target": CompanyInfo(
+                company_id=state.active_company_context.lower().replace(" ", "_"),
+                company_name=state.active_company_context,
+                industry="Unknown"
+            ),
+            "next_agent": "analysis_planner",
+        }
+    
+    # Truly conceptual question - give educational answer
     llm = get_llm(temperature=0.2)
-    
-    last_message = get_last_human_message(state.messages)
     
     prompt = f"""You are an expert M&A Due Diligence consultant. The user has asked a conceptual question about M&A.
 
@@ -378,6 +485,218 @@ def informational_handler_node(state: SupervisorState) -> dict:
             "messages": [AIMessage(content="I specialize in M&A due diligence. Please provide a company name to analyze, or ask me about financial, legal, or HR aspects of mergers and acquisitions.")],
             "next_agent": "FINISH",
         }
+
+
+def create_focused_query(original_query: str, domains: List[str]) -> str:
+    """
+    Create a focused query context for domain agents.
+    
+    This function extracts the specific aspect the user is asking about
+    and creates a focused prompt that tells agents exactly what to analyze.
+    
+    Args:
+        original_query: The user's original query
+        domains: List of detected domains
+        
+    Returns:
+        Focused query string for agents
+    """
+    query_lower = original_query.lower()
+    
+    # Extract specific focus areas from the query
+    focus_areas = []
+    
+    # Finance-specific focus detection
+    if "finance" in domains:
+        if any(kw in query_lower for kw in ["revenue", "sales", "top line"]):
+            focus_areas.append("revenue and sales performance")
+        if any(kw in query_lower for kw in ["profit", "margin", "earnings", "ebitda"]):
+            focus_areas.append("profitability and margins")
+        if any(kw in query_lower for kw in ["cash", "liquidity", "working capital"]):
+            focus_areas.append("cash flow and liquidity")
+        if any(kw in query_lower for kw in ["debt", "leverage", "liabilities"]):
+            focus_areas.append("debt and leverage")
+        if any(kw in query_lower for kw in ["growth", "trend", "trajectory"]):
+            focus_areas.append("growth trends")
+        if any(kw in query_lower for kw in ["valuation", "multiple", "worth"]):
+            focus_areas.append("valuation metrics")
+    
+    # Legal-specific focus detection
+    if "legal" in domains:
+        if any(kw in query_lower for kw in ["litigation", "lawsuit", "court", "sue"]):
+            focus_areas.append("litigation and legal disputes")
+        if any(kw in query_lower for kw in ["contract", "agreement"]):
+            focus_areas.append("contracts and agreements")
+        if any(kw in query_lower for kw in ["ip", "patent", "trademark", "intellectual"]):
+            focus_areas.append("intellectual property")
+        if any(kw in query_lower for kw in ["compliance", "regulatory", "regulation"]):
+            focus_areas.append("regulatory compliance")
+        if any(kw in query_lower for kw in ["risk", "liability"]):
+            focus_areas.append("legal risks and liabilities")
+    
+    # HR-specific focus detection
+    if "hr" in domains:
+        if any(kw in query_lower for kw in ["employee", "headcount", "staff", "workforce"]):
+            focus_areas.append("workforce and headcount")
+        if any(kw in query_lower for kw in ["attrition", "turnover", "retention"]):
+            focus_areas.append("employee retention and attrition")
+        if any(kw in query_lower for kw in ["culture", "morale", "engagement"]):
+            focus_areas.append("culture and employee engagement")
+        if any(kw in query_lower for kw in ["compensation", "salary", "benefits", "pay"]):
+            focus_areas.append("compensation and benefits")
+        if any(kw in query_lower for kw in ["talent", "key person", "leadership"]):
+            focus_areas.append("key personnel and talent")
+    
+    if focus_areas:
+        return f"FOCUS ANALYSIS ON: {', '.join(focus_areas)}. Original query: {original_query}"
+    else:
+        return f"ANALYZE: {original_query}"
+
+
+def clarification_handler_node(state: SupervisorState) -> dict:
+    """
+    Handle actionable domain queries that need company context clarification.
+    
+    This node is triggered when:
+    - User asks a specific domain question (e.g., "how is the company performing on revenue?")
+    - But no specific company name is provided
+    - The query is actionable (not just conceptual)
+    
+    If there's an active company in session context, use it.
+    Otherwise, ask for clarification.
+    
+    ENHANCED: Now properly sets analysis_scope based on detected domains
+    to enable single-agent routing for focused queries.
+    """
+    log_agent_action(logger, "clarification_handler", "handling_clarification", {
+        "active_company_context": state.active_company_context,
+    })
+    
+    last_message = get_last_human_message(state.messages) or ""
+    
+    # Check if we have an active company context from previous conversation
+    if state.active_company_context:
+        # We have context! Route to analysis with the known company
+        logger.info(f"Using active company context: {state.active_company_context}")
+        
+        # Detect which domains are being asked about
+        from src.common.intent_classifier import has_domain_keywords, detect_required_domains
+        has_domains, matched_domains = has_domain_keywords(last_message)
+        
+        # Determine analysis scope based on matched domains
+        # This is KEY - single domain = single agent routing
+        if matched_domains and len(matched_domains) == 1:
+            domain = matched_domains[0]
+            scope_map = {
+                "finance": AnalysisScope.FINANCIAL_ONLY,
+                "legal": AnalysisScope.LEGAL_ONLY,
+                "hr": AnalysisScope.HR_ONLY,
+                "compliance": AnalysisScope.COMPLIANCE_ONLY,
+                "strategic": AnalysisScope.STRATEGIC_ONLY,
+            }
+            analysis_scope = scope_map.get(domain, AnalysisScope.FULL_DUE_DILIGENCE)
+            logger.info(f"Single domain detected ({domain}), setting scope to {analysis_scope.value}")
+        elif matched_domains and len(matched_domains) > 1:
+            # Multiple domains but not all - still targeted
+            analysis_scope = AnalysisScope.FULL_DUE_DILIGENCE
+            logger.info(f"Multiple domains detected: {matched_domains}, using FULL scope with domain filter")
+        else:
+            # No specific domains detected - full analysis
+            analysis_scope = AnalysisScope.FULL_DUE_DILIGENCE
+            matched_domains = ["finance", "legal", "hr"]
+            logger.info("No specific domain detected, defaulting to full analysis")
+        
+        # Create focused query context for the agent
+        focused_query = create_focused_query(last_message, matched_domains)
+        
+        # Create a clarified message that includes the company
+        domain_desc = ", ".join(matched_domains) if matched_domains else "all aspects"
+        
+        # Set up for analysis with context
+        return {
+            "messages": [AIMessage(content=f"I'll analyze {state.active_company_context}'s {domain_desc}. Let me pull the relevant data...")],
+            "chain_activated": True,
+            "intent_type": "MA_DUE_DILIGENCE",
+            "analysis_scope": analysis_scope,
+            "required_domains": matched_domains,
+            "focused_query": focused_query,  # Pass focused context to agents
+            "target": CompanyInfo(
+                company_id=state.active_company_context.lower().replace(" ", "_"),
+                company_name=state.active_company_context,
+                industry="Unknown"
+            ),
+            "next_agent": "analysis_planner",
+        }
+    
+    # No context - need to ask for company name
+    llm = get_llm(temperature=0.3)
+    
+    # Detect what domain they're asking about to make the clarification specific
+    from src.common.intent_classifier import has_domain_keywords
+    has_domains, matched_domains = has_domain_keywords(last_message)
+    
+    domain_context = ""
+    if matched_domains:
+        domain_names = {
+            "finance": "financial metrics and performance",
+            "legal": "legal and compliance status",
+            "hr": "HR policies and workforce",
+            "compliance": "regulatory compliance",
+            "strategic": "strategic positioning"
+        }
+        domain_desc = [domain_names.get(d, d) for d in matched_domains]
+        domain_context = f"I can see you're interested in {', '.join(domain_desc)}. "
+    
+    prompt = f"""You are an M&A Due Diligence Assistant. The user asked an actionable question but didn't specify which company to analyze.
+
+User's Query: "{last_message}"
+
+{domain_context}Generate a helpful, concise clarification request that:
+1. Acknowledges what they're asking about
+2. Asks specifically which company they want to analyze
+3. Optionally mentions what analysis you can provide once they name a company
+
+Keep it friendly and under 3 sentences. Don't be overly formal."""
+
+    try:
+        response = llm.invoke([SystemMessage(content=prompt)])
+        logger.info("Clarification request generated successfully")
+        return {
+            "messages": [response],
+            "next_agent": "FINISH",
+        }
+    except Exception as e:
+        logger.error(f"Error generating clarification: {e}")
+        
+        # Fallback clarification
+        fallback_msg = f"I'd be happy to help with that analysis! {domain_context}Could you please tell me which company you'd like me to analyze?"
+        return {
+            "messages": [AIMessage(content=fallback_msg)],
+            "next_agent": "FINISH",
+        }
+
+
+def route_after_clarification(state: SupervisorState) -> str:
+    """
+    Route after clarification handler.
+    
+    If the clarification handler found active company context and set up
+    for analysis, route to analysis_planner. Otherwise, END (asked for clarification).
+    
+    Args:
+        state: Current supervisor state
+        
+    Returns:
+        Next node: "analysis_planner" or END
+    """
+    # Check if chain was activated (meaning we found context)
+    if state.chain_activated and state.target:
+        logger.info(f"Clarification found context, routing to analysis_planner for {state.target.company_name}")
+        return "analysis_planner"
+    
+    # Otherwise, we asked for clarification - end turn
+    logger.info("Clarification requested, ending turn")
+    return END
 
 
 # =============================================================================
@@ -1456,6 +1775,7 @@ def build_supervisor_graph():
     workflow.add_node("help_handler", help_handler_node)
     workflow.add_node("ma_question_handler", ma_question_handler_node)
     workflow.add_node("informational_handler", informational_handler_node)
+    workflow.add_node("clarification_handler", clarification_handler_node)  # NEW: For queries needing context
     
     # =========================================================================
     # PHASE 2: Analysis Planning (NEW v2.0)
@@ -1499,6 +1819,7 @@ def build_supervisor_graph():
         route_after_intent,
         {
             "analysis_planner": "analysis_planner",  # NEW: goes to planner first
+            "clarification_handler": "clarification_handler",  # NEW: queries needing context
             "supervisor": "supervisor",  # Legacy fallback
             "greeting_handler": "greeting_handler",
             "help_handler": "help_handler",
@@ -1514,6 +1835,18 @@ def build_supervisor_graph():
     workflow.add_edge("help_handler", END)
     workflow.add_edge("ma_question_handler", END)
     workflow.add_edge("informational_handler", END)
+    
+    # =========================================================================
+    # Clarification Handler routes to END or analysis_planner (if context found)
+    # =========================================================================
+    workflow.add_conditional_edges(
+        "clarification_handler",
+        route_after_clarification,
+        {
+            "analysis_planner": "analysis_planner",  # If context was found
+            END: END,  # If asking for clarification
+        }
+    )
     
     # =========================================================================
     # Analysis Planner routes directly to first domain agent
