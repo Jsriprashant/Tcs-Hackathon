@@ -9,14 +9,23 @@ tools:
       max_retries: 3
       timeout: 30
 
-  # Add your tool configurations here
-  # my_custom_tool:
-  #   enabled: true
-  #   api_key: "${MY_TOOL_API_KEY}"
-  #   base_url: "https://api.example.com"
-  #   settings:
-  #     rate_limit: 100
-  #     cache_ttl: 300
+  # Social Media Sentiment Analysis
+  social_media:
+    enabled: true
+    settings:
+      update_interval_seconds: 30
+      max_opinions_per_company: 1000
+      sentiment_threshold_positive: 0.2
+      sentiment_threshold_negative: -0.2
+
+# LLM Configuration for opinion generation
+llm:
+  # Set these via environment variables
+  api_key: "${OPENAI_API_KEY}"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  model: "gpt-3.5-turbo"
+  max_tokens: 100
+  temperature: 0.8
 
 # Global tool settings
 defaults:
@@ -29,3 +38,4 @@ features:
   enable_caching: false
   enable_metrics: false
   enable_tracing: false
+  enable_opinion_auto_update: true

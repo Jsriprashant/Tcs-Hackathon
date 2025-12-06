@@ -1,0 +1,229 @@
+{
+  "companies": {
+    "BBD Softwares": {
+      "description": "A leading software development company specializing in enterprise solutions and cloud services",
+      "industry": "Software & Technology"
+    },
+    "Supernova": {
+      "description": "An innovative automobile manufacturer focusing on electric and autonomous vehicles",
+      "industry": "Automobile"
+    },
+    "Technobox": {
+      "description": "A consumer electronics company known for smart devices and IoT solutions",
+      "industry": "Consumer Electronics"
+    },
+    "GreenLeaf Energy": {
+      "description": "A renewable energy company specializing in solar and wind power solutions",
+      "industry": "Energy"
+    },
+    "HealthFirst": {
+      "description": "A healthcare technology company providing telemedicine and health monitoring solutions",
+      "industry": "Healthcare Technology"
+    }
+  },
+  "opinions": [
+    {
+      "id": "op_001",
+      "user": "tech_enthusiast_99",
+      "company": "BBD Softwares",
+      "opinion": "BBD Softwares has been consistently delivering high-quality enterprise solutions. Their cloud migration service saved our company months of work!",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "likes": 245,
+      "platform": "Twitter"
+    },
+    {
+      "id": "op_002",
+      "user": "startup_founder",
+      "company": "BBD Softwares",
+      "opinion": "Disappointed with BBD's customer support. Waited 3 days for a response to a critical bug. Not acceptable for enterprise software.",
+      "timestamp": "2024-02-20T14:15:00Z",
+      "likes": 89,
+      "platform": "LinkedIn"
+    },
+    {
+      "id": "op_003",
+      "user": "car_lover_2024",
+      "company": "Supernova",
+      "opinion": "Just test drove the Supernova EV-X. Amazing acceleration and the autopilot feature is incredibly smooth. This is the future of driving!",
+      "timestamp": "2024-03-10T09:45:00Z",
+      "likes": 567,
+      "platform": "Twitter"
+    },
+    {
+      "id": "op_004",
+      "user": "eco_warrior",
+      "company": "Supernova",
+      "opinion": "Supernova's commitment to sustainability is impressive. Their factory runs on 100% renewable energy. More companies should follow this example.",
+      "timestamp": "2024-04-05T16:20:00Z",
+      "likes": 892,
+      "platform": "Instagram"
+    },
+    {
+      "id": "op_005",
+      "user": "frustrated_owner",
+      "company": "Supernova",
+      "opinion": "My Supernova has been in the service center 4 times in 6 months. Quality control issues are a real concern. Very disappointed.",
+      "timestamp": "2024-05-12T11:00:00Z",
+      "likes": 234,
+      "platform": "Reddit"
+    },
+    {
+      "id": "op_006",
+      "user": "gadget_geek",
+      "company": "Technobox",
+      "opinion": "The new Technobox smart home hub is a game changer! Everything connects seamlessly. Best purchase I've made this year.",
+      "timestamp": "2024-03-25T20:30:00Z",
+      "likes": 445,
+      "platform": "YouTube"
+    },
+    {
+      "id": "op_007",
+      "user": "privacy_advocate",
+      "company": "Technobox",
+      "opinion": "Concerned about Technobox's data collection practices. Their IoT devices send way too much data to their servers. Privacy nightmare!",
+      "timestamp": "2024-06-18T08:15:00Z",
+      "likes": 678,
+      "platform": "Twitter"
+    },
+    {
+      "id": "op_008",
+      "user": "budget_shopper",
+      "company": "Technobox",
+      "opinion": "Technobox offers great value for money. Their smartwatch has features similar to premium brands at half the price.",
+      "timestamp": "2024-07-22T13:45:00Z",
+      "likes": 312,
+      "platform": "Facebook"
+    },
+    {
+      "id": "op_009",
+      "user": "developer_jane",
+      "company": "BBD Softwares",
+      "opinion": "BBD's API documentation is excellent. Integrated their payment solution in just 2 days. Developer experience matters!",
+      "timestamp": "2024-08-30T17:00:00Z",
+      "likes": 156,
+      "platform": "Twitter"
+    },
+    {
+      "id": "op_010",
+      "user": "industry_analyst",
+      "company": "BBD Softwares",
+      "opinion": "BBD Softwares Q3 earnings exceeded expectations. Their pivot to AI-powered solutions is paying off. Strong buy recommendation.",
+      "timestamp": "2024-09-15T10:00:00Z",
+      "likes": 423,
+      "platform": "LinkedIn"
+    },
+    {
+      "id": "op_011",
+      "user": "ev_skeptic",
+      "company": "Supernova",
+      "opinion": "Supernova's range claims are exaggerated. Got only 280 miles instead of the advertised 350. Misleading marketing.",
+      "timestamp": "2024-10-01T12:30:00Z",
+      "likes": 189,
+      "platform": "Reddit"
+    },
+    {
+      "id": "op_012",
+      "user": "tech_reviewer",
+      "company": "Supernova",
+      "opinion": "Supernova's software update just added amazing new features. Their over-the-air updates are the best in the industry.",
+      "timestamp": "2024-10-20T15:45:00Z",
+      "likes": 721,
+      "platform": "YouTube"
+    },
+    {
+      "id": "op_013",
+      "user": "home_automation_fan",
+      "company": "Technobox",
+      "opinion": "Technobox customer service resolved my issue within an hour. Impressive support for a tech company!",
+      "timestamp": "2024-11-05T09:20:00Z",
+      "likes": 98,
+      "platform": "Twitter"
+    },
+    {
+      "id": "op_014",
+      "user": "green_investor",
+      "company": "GreenLeaf Energy",
+      "opinion": "GreenLeaf's solar panel efficiency is industry-leading. Their stock is definitely one to watch for long-term gains.",
+      "timestamp": "2024-06-10T14:00:00Z",
+      "likes": 534,
+      "platform": "LinkedIn"
+    },
+    {
+      "id": "op_015",
+      "user": "homeowner_mike",
+      "company": "GreenLeaf Energy",
+      "opinion": "Installed GreenLeaf solar panels 6 months ago. My electricity bill dropped by 70%. Best investment for my home!",
+      "timestamp": "2024-08-15T11:30:00Z",
+      "likes": 876,
+      "platform": "Facebook"
+    },
+    {
+      "id": "op_016",
+      "user": "rural_customer",
+      "company": "GreenLeaf Energy",
+      "opinion": "GreenLeaf refused to install in my area citing 'logistical challenges'. Their coverage is limited to urban areas only.",
+      "timestamp": "2024-09-22T16:45:00Z",
+      "likes": 145,
+      "platform": "Twitter"
+    },
+    {
+      "id": "op_017",
+      "user": "health_tech_fan",
+      "company": "HealthFirst",
+      "opinion": "HealthFirst's telemedicine app saved me a trip to the ER. Got diagnosed and prescription within 30 minutes!",
+      "timestamp": "2024-04-18T22:00:00Z",
+      "likes": 654,
+      "platform": "Twitter"
+    },
+    {
+      "id": "op_018",
+      "user": "senior_citizen",
+      "company": "HealthFirst",
+      "opinion": "HealthFirst app is too complicated for elderly users. Needs simpler interface. Gave up after 20 minutes of trying.",
+      "timestamp": "2024-07-30T10:15:00Z",
+      "likes": 287,
+      "platform": "Facebook"
+    },
+    {
+      "id": "op_019",
+      "user": "fitness_guru",
+      "company": "HealthFirst",
+      "opinion": "Love how HealthFirst integrates with my fitness trackers. Comprehensive health monitoring in one place!",
+      "timestamp": "2024-10-12T07:30:00Z",
+      "likes": 412,
+      "platform": "Instagram"
+    },
+    {
+      "id": "op_020",
+      "user": "data_scientist",
+      "company": "BBD Softwares",
+      "opinion": "BBD's new ML platform is a joke. Outdated algorithms and poor GPU utilization. Stick with the established players.",
+      "timestamp": "2024-11-25T19:00:00Z",
+      "likes": 178,
+      "platform": "Reddit"
+    },
+    {
+      "id": "op_021",
+      "user": "iot_expert",
+      "company": "BBD Softwares",
+      "opinion": "Mixed feelings about BBD Softwares's cloud migration. Has pros and cons.",
+      "timestamp": "2025-12-06T11:38:36.214409Z",
+      "likes": 476,
+      "platform": "LinkedIn"
+    },
+    {
+      "id": "op_022",
+      "user": "random_user_123",
+      "company": "BBD Softwares",
+      "opinion": "Tried BBD Softwares's customer support. It's decent but could be better.",
+      "timestamp": "2025-12-06T11:39:06.266050Z",
+      "likes": 383,
+      "platform": "Instagram"
+    }
+  ],
+  "metadata": {
+    "last_updated": "2025-12-06T11:39:06.266050Z",
+    "total_opinions": 22,
+    "version": "1.0"
+  }
+}
