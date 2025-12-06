@@ -631,8 +631,16 @@ def master_analyst_node(state: SupervisorState) -> dict:
             "overall_risk": aggregated_risk.overall_score if aggregated_risk else "N/A",
         })
         
+        # Build final response with visualization data
+        final_content = response.content
+        
+        # Append consolidated result as special markdown code block for frontend charts
+        if state.consolidated_result:
+            chart_json = json.dumps(state.consolidated_result, indent=2, default=str)
+            final_content = f"{final_content}\n\n```due-diligence-report\n{chart_json}\n```"
+        
         return {
-            "messages": [response],
+            "messages": [AIMessage(content=final_content)],
             "deal_analysis": deal_analysis,
             "deal_recommendation": recommendation.value,
             "recommendation_rationale": response.content[:500],

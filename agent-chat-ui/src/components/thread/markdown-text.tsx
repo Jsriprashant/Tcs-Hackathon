@@ -12,6 +12,7 @@ import { SyntaxHighlighter } from "@/components/thread/syntax-highlighter";
 
 import { TooltipIconButton } from "@/components/thread/tooltip-icon-button";
 import { cn } from "@/lib/utils";
+import { DueDiligenceCharts, isDueDiligenceData } from "@/components/charts";
 
 import "katex/dist/katex.min.css";
 
@@ -210,11 +211,24 @@ const defaultComponents: any = {
     className?: string;
     children: React.ReactNode;
   }) => {
-    const match = /language-(\w+)/.exec(className || "");
+    const match = /language-(\S+)/.exec(className || "");
 
     if (match) {
       const language = match[1];
       const code = String(children).replace(/\n$/, "");
+
+      // Check for due-diligence-report visualization
+      if (language === "due-diligence-report") {
+        try {
+          const data = JSON.parse(code);
+          if (isDueDiligenceData(data)) {
+            return <DueDiligenceCharts data={data} />;
+          }
+        } catch (e) {
+          // If parsing fails, fall through to normal code display
+          console.error("Failed to parse due-diligence-report JSON:", e);
+        }
+      }
 
       return (
         <>
