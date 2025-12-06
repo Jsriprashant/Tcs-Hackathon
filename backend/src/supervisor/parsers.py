@@ -38,9 +38,11 @@ def create_legal_agent_input(state: SupervisorState) -> Dict[str, Any]:
     
     Legal Agent expects:
     {
-        "messages": [],  # Can be empty
+        "messages": [],  # Can be empty or contain focused query
         "company_id": "BBD"  # Required - company identifier
     }
+    
+    ENHANCED: Now supports focused_query for targeted analysis.
     
     Args:
         state: Current supervisor state with target company info
@@ -51,13 +53,22 @@ def create_legal_agent_input(state: SupervisorState) -> Dict[str, Any]:
     Raises:
         ValueError: If no target company is specified
     """
+    from langchain_core.messages import HumanMessage
+    
     if not state.target:
         raise ValueError("Legal agent requires target company to be specified")
     
     # Extract company_id from CompanyInfo
     company_id = state.target.company_id.upper()
     
-    logger.info(f"Creating legal agent input for company_id: {company_id}")
+    logger.info(f"Creating legal agent input for company_id: {company_id}, focused_query: {state.focused_query}")
+    
+    # If we have a focused query, pass it as a message
+    if state.focused_query:
+        return {
+            "messages": [HumanMessage(content=f"For company {company_id}: {state.focused_query}")],
+            "company_id": company_id,
+        }
     
     return {
         "messages": [],  # Legal agent doesn't need prior messages
@@ -204,6 +215,9 @@ def create_finance_agent_input(state: SupervisorState) -> Dict[str, Any]:
         }
     }
     
+    ENHANCED: Now supports focused_query for targeted analysis.
+    When focused_query is set, creates a targeted prompt instead of full DD.
+    
     Args:
         state: Current supervisor state with target company info
         
@@ -221,10 +235,26 @@ def create_finance_agent_input(state: SupervisorState) -> Dict[str, Any]:
     company_id = state.target.company_id.upper()
     company_name = state.target.company_name
     
-    logger.info(f"Creating finance agent input for company_id: {company_id}")
+    logger.info(f"Creating finance agent input for company_id: {company_id}, focused_query: {state.focused_query}")
     
-    # Create analysis prompt for the finance agent
-    analysis_prompt = f"""Analyze the financial health and M&A readiness of {company_name} ({company_id}).
+    # Check if we have a focused query (targeted analysis)
+    if state.focused_query:
+        # Create TARGETED analysis prompt - much more focused
+        analysis_prompt = f"""Analyze {company_name} ({company_id}) with a SPECIFIC FOCUS.
+
+{state.focused_query}
+
+Instructions:
+1. Retrieve the relevant financial documents for {company_id}
+2. Focus ONLY on the specific aspect requested - do NOT do a full comprehensive analysis
+3. Provide targeted insights and metrics related to the specific request
+4. Keep the response focused and actionable
+
+Company ID: {company_id}
+"""
+    else:
+        # Standard comprehensive analysis prompt
+        analysis_prompt = f"""Analyze the financial health and M&A readiness of {company_name} ({company_id}).
 
 Please perform a comprehensive financial due diligence analysis including:
 1. Retrieve financial documents for {company_id}
@@ -452,6 +482,8 @@ def create_hr_agent_input(state) -> Dict[str, Any]:
     3. compare_policy_category(...) - Compare specific categories
     4. calculate_hr_compatibility_score(...) - Calculate final score
     
+    ENHANCED: Now supports focused_query for targeted analysis.
+    
     Args:
         state: Current supervisor state with target company info
         
@@ -470,10 +502,26 @@ def create_hr_agent_input(state) -> Dict[str, Any]:
     company_name = state.target.company_name
     acquirer_name = state.acquirer.company_name if state.acquirer else "TCS"
     
-    logger.info(f"Creating HR agent input for company_id: {company_id}")
+    logger.info(f"Creating HR agent input for company_id: {company_id}, focused_query: {state.focused_query}")
     
-    # Create detailed analysis prompt for the HR agent
-    analysis_prompt = f"""Perform a comprehensive HR policy comparison between {acquirer_name} (acquirer) and {company_name} ({company_id}) (target).
+    # Check if we have a focused query (targeted analysis)
+    if state.focused_query:
+        # Create TARGETED analysis prompt - much more focused
+        analysis_prompt = f"""Analyze HR policies for {company_name} ({company_id}) with a SPECIFIC FOCUS.
+
+{state.focused_query}
+
+Instructions:
+1. Use `get_target_hr_policies` with company_id="{company_id}" to retrieve target's HR policies
+2. Focus ONLY on the specific HR aspect requested - do NOT do a full comprehensive comparison
+3. Provide targeted insights related to the specific request
+4. Keep the response focused and actionable
+
+Target Company: {company_name} ({company_id})
+"""
+    else:
+        # Standard comprehensive analysis prompt
+        analysis_prompt = f"""Perform a comprehensive HR policy comparison between {acquirer_name} (acquirer) and {company_name} ({company_id}) (target).
 
 ## Instructions
 

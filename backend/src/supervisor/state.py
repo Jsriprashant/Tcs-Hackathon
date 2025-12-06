@@ -49,9 +49,11 @@ class SupervisorState(BaseAgentState):
     intent_type: Optional[Literal[
         "MA_DUE_DILIGENCE",
         "MA_QUESTION",
+        "DOMAIN_QUERY_NO_CONTEXT",
         "INFORMATIONAL",
         "GREETING",
         "HELP",
+        "FOLLOW_UP",
         "UNKNOWN"
     ]] = Field(
         default=None,
@@ -89,6 +91,10 @@ class SupervisorState(BaseAgentState):
         default_factory=list,
         description="Required analysis domains"
     )
+    focused_query: Optional[str] = Field(
+        default=None,
+        description="Focused query context for targeted agent analysis (e.g., 'FOCUS ON: revenue and sales')"
+    )
     
     # ==========================================================================
     # DEAL CONTEXT
@@ -117,6 +123,8 @@ class SupervisorState(BaseAgentState):
         "risk_aggregator",
         "master_analyst",
         "domain_summarizer",
+        "analysis_planner",
+        "clarification_handler",
         "human",
         "FINISH"
     ]] = None
@@ -235,6 +243,22 @@ class SupervisorState(BaseAgentState):
     consolidated_result: Optional[Dict] = Field(
         default=None,
         description="Consolidated result from all agents with scoring table and color coding"
+    )
+    
+    # ==========================================================================
+    # SESSION CONTEXT (NEW - for follow-up queries)
+    # ==========================================================================
+    active_company_context: Optional[str] = Field(
+        default=None,
+        description="Currently active company being discussed for follow-up context"
+    )
+    last_analyzed_domains: List[str] = Field(
+        default_factory=list,
+        description="Domains analyzed in the most recent query for context"
+    )
+    session_history: List[Dict] = Field(
+        default_factory=list,
+        description="Summarized history of queries and actions in this session"
     )
     
     class Config:
