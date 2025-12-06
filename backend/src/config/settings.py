@@ -81,6 +81,36 @@ class Settings(BaseSettings):
         description="Text embedding model"
     )
     
+    # =========================================================================
+    # Ollama Configuration (for local testing)
+    # =========================================================================
+    use_ollama_embedding: bool = Field(
+        default=False,
+        alias="USE_OLLAMA_EMBEDDING",
+        description="Use Ollama for embeddings (for testing only)"
+    )
+    
+    ollama_base_url: str = Field(
+        default="http://localhost:11434",
+        alias="OLLAMA_BASE_URL",
+        description="Ollama server base URL"
+    )
+    
+    ollama_embedding_model: str = Field(
+        default="milkey/gte:large-zh-f16",
+        alias="OLLAMA_EMBEDDING_MODEL",
+        description="Ollama embedding model name"
+    )
+    
+    # =========================================================================
+    # Tesseract OCR Configuration
+    # =========================================================================
+    tesseract_cmd: Optional[str] = Field(
+        default=r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        alias="TESSERACT_CMD",
+        description="Path to Tesseract OCR executable"
+    )
+    
     # Additional models (optional)
     model_gpt35: str = Field(
         default="azure/genailab-maas-gpt-35-turbo",

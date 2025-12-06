@@ -465,7 +465,7 @@ class PDFLoader(BaseLoader):
                     content=full_text,
                     metadata=metadata
                 ))
-          except Exception as e:
+        except Exception as e:
             logger.error(f"Error loading PDF {file_path}: {e}")
             if self.use_ocr:
                 logger.info("Attempting OCR fallback...")
@@ -517,6 +517,12 @@ class PDFLoader(BaseLoader):
                 import pytesseract
                 from PIL import Image
                 import io
+                from src.config.settings import get_settings
+                
+                # Configure Tesseract path
+                settings = get_settings()
+                if settings.tesseract_cmd:
+                    pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
                 
                 logger.info(f"PDF {filename} is scanned, using PyMuPDF + Tesseract OCR...")
                 full_text = ""

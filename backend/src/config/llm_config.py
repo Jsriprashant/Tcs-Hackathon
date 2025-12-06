@@ -76,13 +76,28 @@ def get_llm(
 @lru_cache()
 def get_embedding_model() -> Embeddings:
     """
-    Get configured embedding model for TCS GenAI Lab.
+    Get configured embedding model.
+    
+    Uses Ollama if USE_OLLAMA_EMBEDDING=true, otherwise uses TCS GenAI Lab.
     
     Returns:
-        Configured OpenAIEmbeddings instance
+        Configured Embeddings instance
     """
     settings = get_settings()
     
+    # Check if we should use Ollama for embeddings (testing mode)
+    if settings.use_ollama_embedding:
+        import logging
+        logging.getLogger(__name__).info(
+            f"Using Ollama embedding model: {settings.ollama_embedding_model}"
+        )
+        from langchain_ollama import OllamaEmbeddings
+        return OllamaEmbeddings(
+            model=settings.ollama_embedding_model,
+            base_url=settings.ollama_base_url,
+        )
+    
+    # Use TCS GenAI Lab embeddings (production)
     # Use custom HTTP client for SSL configuration
     http_client = get_http_client()
     
